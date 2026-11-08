@@ -96,7 +96,8 @@ jobs:
           DB_DATABASE: oravelle_test
           DB_USERNAME: root
           DB_PASSWORD: root
-        run: php artisan test --filter=OrderConcurrencyTest
+        # --fail-on-skipped: ถ้าทดสอบถูกข้าม (ตั้งค่าฐานข้อมูลไม่ครบ) ให้งานนี้ล้ม ไม่ผ่านแบบเงียบ ๆ
+        run: php artisan test --filter=OrderConcurrencyTest --fail-on-skipped
 
   flutter:
     name: Flutter analyze
