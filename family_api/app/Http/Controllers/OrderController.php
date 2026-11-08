@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Address;
 use App\Models\CartItem;
 use App\Models\Order;
+use App\Models\OrderCheckout;
 use App\Models\OrderItem;
 use App\Models\OutOfStock;
 use App\Models\PaymentTransaction;
@@ -13,6 +14,8 @@ use App\Models\ProductReview;
 use App\Models\Shop;
 use App\Models\User;
 use App\Services\OrderLines;
+use Closure;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -159,13 +162,29 @@ class OrderController extends Controller
 
         $user = $request->user();
 
-        // กดสั่งซ้ำ (เน็ตช้า / กดสองครั้ง) → คืนคำสั่งซื้อเดิม ไม่สร้างใหม่
-        $existing = Order::where('buyer_id', $user->id)->where('checkout_id', $data['checkout_id'])->get();
+        $placed = fn () => Order::where('buyer_id', $user->id)
+            ->where('checkout_id', $data['checkout_id'])
+            ->orderBy('id')
+            ->get();
 
-        if ($existing->isNotEmpty()) {
-            return $this->ordersResponse($user, $existing, 200);
+        // กดสั่งซ้ำ (เน็ตช้า / กดสองครั้ง / แอปส่งใหม่หลังหมดเวลารอ) → คืนคำสั่งซื้อเดิม ไม่สร้างใหม่
+        if (($orders = $placed())->isNotEmpty()) {
+            return $this->ordersResponse($user, $orders, 200);
         }
 
+        $response = $this->placeCheckout($user, $data);
+
+        // ไม่สำเร็จ เพราะคำขอเดียวกันอีกคำขอ (เข้าพร้อมกัน) สร้างเสร็จไปก่อน
+        // เช่น ชน unique ของ order_checkouts / เห็นสต็อกที่คำขอนั้นตัดไปแล้ว → คืนผลของคำขอนั้น
+        if ($response->getStatusCode() >= 400 && ($orders = $placed())->isNotEmpty()) {
+            return $this->ordersResponse($user, $orders, 200);
+        }
+
+        return $response;
+    }
+
+    private function placeCheckout(User $user, array $data): JsonResponse
+    {
         $lines = app(OrderLines::class)->resolve($user, $data['items']);
 
         if ($lines->contains(fn (array $line) => $line['problem'] !== null)) {
@@ -231,19 +250,34 @@ class OrderController extends Controller
         ];
 
         try {
-            $orders = DB::transaction(fn () => $byShop->map(function (Collection $shopLines, int $shopId) use ($user, $groups, $address, $recipient, $data) {
-                $group = $groups->get($shopId);
+            $orders = DB::transaction(function () use ($byShop, $user, $groups, $address, $recipient, $data) {
+                // จอง checkout นี้ก่อนตัดสต็อก (unique buyer_id + checkout_id)
+                // คำขอเดียวกันที่เข้าพร้อมกันจะรอตรงนี้จนคำขอแรกเสร็จ แล้วชน unique → คืนผลเดิม (ด้านล่าง)
+                // คำขอแรกล้ม (สต็อกไม่พอ ฯลฯ) → แถวนี้ถูกยกเลิกด้วย ส่งใหม่ได้
+                OrderCheckout::create([
+                    'buyer_id' => $user->id,
+                    'checkout_id' => $data['checkout_id'],
+                ]);
 
-                $needsAddress = in_array($group['delivery_method'], config('market.address_methods'), true);
+                return $byShop->map(function (Collection $shopLines, int $shopId) use ($user, $groups, $address, $recipient, $data) {
+                    $group = $groups->get($shopId);
 
-                return Order::placeGroup($user, $shopLines->first()['product']->shop, $shopLines->all(), [
-                    ...$recipient,
-                    'delivery_method' => $group['delivery_method'],
-                    'payment_method' => $group['payment_method'],
-                    'address' => $needsAddress ? $address?->fullAddress() : null,
-                    'note' => $group['note'] ?? null,
-                ], $data['checkout_id']);
-            })->values());
+                    $needsAddress = in_array($group['delivery_method'], config('market.address_methods'), true);
+
+                    return Order::placeGroup($user, $shopLines->first()['product']->shop, $shopLines->all(), [
+                        ...$recipient,
+                        'delivery_method' => $group['delivery_method'],
+                        'payment_method' => $group['payment_method'],
+                        'address' => $needsAddress ? $address?->fullAddress() : null,
+                        'note' => $group['note'] ?? null,
+                    ], $data['checkout_id']);
+                })->values();
+            }, 3);
+        } catch (UniqueConstraintViolationException $e) {
+            // ปกติ = อีกคำขอของ checkout เดียวกันสร้างไปแล้ว → storeCheckout() คืนคำสั่งซื้อนั้น
+            Log::info('Checkout unique conflict', ['buyer_id' => $user->id, 'error' => $e->getMessage()]);
+
+            return $this->fail('สั่งซื้อไม่สำเร็จ กรุณากดสั่งซื้ออีกครั้ง', 409);
         } catch (OutOfStock $e) {
             return $this->changed(
                 $user,
@@ -356,6 +390,8 @@ class OrderController extends Controller
 
         $mine = fn () => Order::where('buyer_id', $user->id);
 
+        Order::expireStale(fn ($query) => $query->where('buyer_id', $user->id));
+
         return $this->list($request, $mine(), $user, [
             'counts' => [
                 'to_pay' => $mine()->whereIn('status', self::FILTERS['to_pay'])->count(),
@@ -375,6 +411,8 @@ class OrderController extends Controller
             return $this->fail('คุณยังไม่มีร้าน', 404);
         }
 
+        Order::expireStale(fn ($query) => $query->where('shop_id', $shop->id));
+
         return $this->list($request, Order::where('shop_id', $shop->id), $user, [
             'todo' => Order::where('shop_id', $shop->id)->sellerTodo()->count(),
         ]);
@@ -388,13 +426,13 @@ class OrderController extends Controller
     {
         $user = $request->user();
 
-        Order::expireStale();
-
-        $order->refresh();
-
         if (!$order->isBuyer($user) && !$order->isSeller($user)) {
             return $this->notFound();
         }
+
+        Order::expireStale(fn ($query) => $query->whereKey($order->id));
+
+        $order->refresh();
 
         return response()->json([
             'status' => true,
@@ -418,7 +456,7 @@ class OrderController extends Controller
             $order,
             'reject_slip',
             'แจ้งผู้ซื้อให้แนบสลิปใหม่แล้ว',
-            fn () => $order->rejectSlip(trim($data['reason']))
+            fn (Closure $allowed) => $order->rejectSlip(trim($data['reason']), $allowed)
         );
     }
 
@@ -458,10 +496,11 @@ class OrderController extends Controller
             $order,
             'ship',
             'บันทึกการส่งสินค้าแล้ว',
-            fn () => $order->ship(
+            fn (Closure $allowed) => $order->ship(
                 $tracking,
                 filled($data['seller_note'] ?? null) ? trim($data['seller_note']) : null,
-                $carrier
+                $carrier,
+                $allowed
             )
         );
     }
@@ -487,7 +526,7 @@ class OrderController extends Controller
             $order,
             'refund',
             'บันทึกการคืนเงินแล้ว แจ้งลูกค้าแล้ว',
-            fn () => $order->markRefunded(trim($data['note']))
+            fn (Closure $allowed) => $order->markRefunded(trim($data['note']), $allowed)
         );
     }
 
@@ -504,7 +543,7 @@ class OrderController extends Controller
             return $this->fail('คุณยังไม่มีร้าน', 404);
         }
 
-        Order::expireStale();
+        Order::expireStale(fn ($query) => $query->where('shop_id', $shop->id));
 
         $timezone = config('market.timezone');
         $today = now($timezone)->startOfDay();
@@ -592,13 +631,28 @@ class OrderController extends Controller
 
         return $this->act($request, $order, 'pay', function () use (&$message) {
             return $message;
-        }, function () use ($request, $order, &$message) {
+        }, function (Closure $allowed) use ($request, $order, &$message) {
             try {
-                $payment = $order->attachSlip($request->file('slip'));
+                $payment = $order->attachSlip($request->file('slip'), $allowed);
             } catch (Throwable $e) {
                 Log::error('Order slip upload failed', ['order_id' => $order->id, 'error' => $e->getMessage()]);
 
                 return $this->fail('อัปโหลดสลิปไม่สำเร็จ กรุณาลองอีกครั้ง', 500);
+            }
+
+            // สถานะเปลี่ยนระหว่างตรวจสลิป (เช่น แนบซ้อนกัน 2 ครั้ง) → 409
+            if ($payment === null) {
+                return false;
+            }
+
+            // คำสั่งซื้อถูกยกเลิก (หมดเวลาชำระ) ระหว่างตรวจสลิป → แจ้งร้านให้คืนเงินแล้ว
+            if ($order->status === Order::STATUS_CANCELLED) {
+                return response()->json([
+                    'status' => false,
+                    'code' => 'order_cancelled',
+                    'message' => 'คำสั่งซื้อนี้ถูกยกเลิกไปก่อนตรวจสลิปเสร็จ ระบบแจ้งร้านให้ตรวจยอดและคืนเงินให้คุณแล้ว',
+                    'order' => $order->refresh()->toPayload($request->user()),
+                ], 409);
             }
 
             if ($payment->status === PaymentTransaction::STATUS_REJECTED) {
@@ -626,13 +680,13 @@ class OrderController extends Controller
             $order,
             'confirm_payment',
             'ยืนยันรับเงินแล้ว จัดส่งสินค้าได้เลย',
-            fn () => $order->confirmPayment()
+            fn (Closure $allowed) => $order->confirmPayment($allowed)
         );
     }
 
     public function received(Request $request, Order $order)
     {
-        return $this->act($request, $order, 'received', 'ขอบคุณที่ยืนยัน คำสั่งซื้อสำเร็จแล้ว', fn () => $order->complete());
+        return $this->act($request, $order, 'received', 'ขอบคุณที่ยืนยัน คำสั่งซื้อสำเร็จแล้ว', fn (Closure $allowed) => $order->complete(Order::BY_BUYER, $allowed));
     }
 
     // =====================================================
@@ -721,7 +775,7 @@ class OrderController extends Controller
             $order,
             'cancel',
             'ยกเลิกคำสั่งซื้อแล้ว',
-            fn () => $order->cancel($bySeller ? Order::BY_SELLER : Order::BY_BUYER, $reason)
+            fn (Closure $allowed) => $order->cancel($bySeller ? Order::BY_SELLER : Order::BY_BUYER, $reason, $allowed)
         );
     }
 
@@ -840,9 +894,10 @@ class OrderController extends Controller
     }
 
     // ตรวจว่าทำรายการนี้ได้ แล้วทำ → ส่งคำสั่งซื้อล่าสุดกลับ
-    // work คืน JsonResponse เมื่อไม่สำเร็จ
+    // work(allowed) คืน JsonResponse เมื่อไม่สำเร็จ / false เมื่อสถานะเปลี่ยนไปก่อน (409)
+    // allowed = ตรวจสิทธิ์ซ้ำกับข้อมูลล่าสุดตอนล็อกแถว (กดพร้อมกัน / อีกฝ่ายเปลี่ยนสถานะ / หมดเวลา)
     // message เป็น Closure ได้ (ข้อความที่รู้หลังทำเสร็จ เช่น ผลตรวจสลิป)
-    private function act(Request $request, Order $order, string $action, string|\Closure $message, callable $work)
+    private function act(Request $request, Order $order, string $action, string|Closure $message, Closure $work)
     {
         $user = $request->user();
 
@@ -850,15 +905,19 @@ class OrderController extends Controller
             return $denied;
         }
 
-        $failed = $work();
+        $result = $work(fn (Order $fresh) => in_array($action, $fresh->actionsFor($user), true));
 
-        if ($failed instanceof JsonResponse) {
-            return $failed;
+        if ($result instanceof JsonResponse) {
+            return $result;
+        }
+
+        if ($result === false) {
+            return $this->changedStatus($order->refresh(), $user);
         }
 
         return response()->json([
             'status' => true,
-            'message' => $message instanceof \Closure ? $message() : $message,
+            'message' => $message instanceof Closure ? $message() : $message,
             'order' => $order->refresh()->toPayload($user),
         ]);
     }
@@ -869,23 +928,28 @@ class OrderController extends Controller
     {
         $user = $request->user();
 
-        Order::expireStale();
-
-        $order->refresh();
-
         if (!$order->isBuyer($user) && !$order->isSeller($user)) {
             return $this->notFound();
         }
 
+        Order::expireStale(fn ($query) => $query->whereKey($order->id));
+
+        $order->refresh();
+
         if (!in_array($action, $order->actionsFor($user), true)) {
-            return response()->json([
-                'status' => false,
-                'message' => 'คำสั่งซื้อนี้เปลี่ยนสถานะไปแล้ว ทำรายการนี้ไม่ได้',
-                'order' => $order->toPayload($user),
-            ], 409);
+            return $this->changedStatus($order, $user);
         }
 
         return null;
+    }
+
+    private function changedStatus(Order $order, User $user): JsonResponse
+    {
+        return response()->json([
+            'status' => false,
+            'message' => 'คำสั่งซื้อนี้เปลี่ยนสถานะไปแล้ว ทำรายการนี้ไม่ได้',
+            'order' => $order->toPayload($user),
+        ], 409);
     }
 
     private function list(Request $request, $query, User $user, array $extra = [])
@@ -893,8 +957,6 @@ class OrderController extends Controller
         $data = $request->validate([
             'filter' => ['nullable', Rule::in(array_keys(self::FILTERS))],
         ]);
-
-        Order::expireStale();
 
         $paginator = $query
             ->when($data['filter'] ?? null, fn ($orders, string $filter) => $filter === 'todo'

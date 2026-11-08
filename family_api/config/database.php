@@ -40,6 +40,9 @@ return [
             'busy_timeout' => null,
             'journal_mode' => null,
             'synchronous' => null,
+            // IMMEDIATE = transaction เขียนเรียงกันทีละคำขอ (ใช้ทดสอบคำขอพร้อมกันบน SQLite)
+            // Production ใช้ MySQL (ล็อกด้วย SELECT ... FOR UPDATE)
+            'transaction_mode' => env('DB_TRANSACTION_MODE', 'DEFERRED'),
         ],
 
         'mysql' => [

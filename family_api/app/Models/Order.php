@@ -4,11 +4,13 @@ namespace App\Models;
 
 use App\Services\SlipVerifier;
 use App\Support\MediaStorage;
+use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -52,6 +54,13 @@ class Order extends Model
         self::STATUS_PAYMENT_REVIEW,
         self::STATUS_PREPARING,
         self::STATUS_SHIPPED,
+    ];
+
+    // ยกเลิกได้ (ก่อนร้านส่งสินค้า)
+    public const CANCELLABLE_STATUSES = [
+        self::STATUS_AWAITING_PAYMENT,
+        self::STATUS_PAYMENT_REVIEW,
+        self::STATUS_PREPARING,
     ];
 
     // ร้านต้องจัดส่ง (ตัวเลขบนปุ่มออเดอร์ของร้าน)
@@ -190,7 +199,7 @@ class Order extends Model
 
     public static function placeGroup(User $buyer, Shop $shop, array $lines, array $data, ?string $checkoutId = null): self
     {
-        foreach ($lines as $line) {
+        foreach (self::inLockOrder($lines, fn (array $line) => [$line['product']->id, $line['variant']?->id ?? 0]) as $line) {
             self::reserveStock($line['product'], $line['variant'], (int) $line['quantity']);
         }
 
@@ -300,10 +309,20 @@ class Order extends Model
         }
     }
 
-    // คืนสต็อกเมื่อยกเลิก
+    // แตะแถวสินค้าตามลำดับรหัสเสมอ (ทุกคำขอล็อกลำดับเดียวกัน ลดโอกาส deadlock บน MySQL)
+    private static function inLockOrder(iterable $rows, Closure $key): array
+    {
+        $rows = is_array($rows) ? $rows : iterator_to_array($rows, false);
+
+        usort($rows, fn ($a, $b) => $key($a) <=> $key($b));
+
+        return $rows;
+    }
+
+    // คืนสต็อกเมื่อยกเลิก (เรียกใน transition() เท่านั้น → คืนครั้งเดียวต่อคำสั่งซื้อ)
     private function restoreStock(): void
     {
-        foreach ($this->items()->get() as $item) {
+        foreach (self::inLockOrder($this->items()->get(), fn (OrderItem $item) => [$item->product_id ?? 0, $item->variant_id ?? 0]) as $item) {
             if ($item->variant_id !== null) {
                 ProductVariant::whereKey($item->variant_id)->increment('stock', $item->quantity);
             }
@@ -324,138 +343,248 @@ class Order extends Model
     }
 
     // =====================================================
-    // เปลี่ยนสถานะ (OrderController ตรวจสิทธิ์ด้วย actionsFor() ก่อนเรียก)
+    // เปลี่ยนสถานะ (OrderController ตรวจสิทธิ์ด้วย actionsFor() ก่อนเรียก
+    // แล้วส่ง allowed มาตรวจซ้ำกับข้อมูลล่าสุดตอนล็อกแถว)
+    // ทุกเมธอดคืน false = สถานะเปลี่ยนไปก่อนแล้ว (กดพร้อมกัน / ชนกับงานหมดเวลา) ไม่ได้แก้อะไร
     // =====================================================
 
-    // ผู้ซื้อแนบสลิป → รอร้านจัดส่งทันที
+    // ล็อกแถวคำสั่งซื้อ (SELECT ... FOR UPDATE) อ่านค่าล่าสุด แล้วเปลี่ยนเฉพาะเมื่อสถานะยังอยู่ใน from
+    // และ allowed (ถ้ามี) ยังผ่าน → คำขอที่ชนกันรอกันที่นี่ ทำได้ครั้งเดียว
+    // (คืนสต็อก / บันทึกประวัติ / แจ้งเตือน ไม่ซ้ำ)
+    // apply ทำใน transaction: ห้ามเรียกบริการภายนอกใน apply (ไม่ถือ lock นาน)
+    // แจ้งเตือนหลัง commit เท่านั้น (ผู้เรียกแจ้งเมื่อได้ true)
+    private function transition(array $from, ?Closure $allowed, Closure $apply): bool
+    {
+        // deadlock บน MySQL → ลองใหม่ได้ (อ่านค่าล่าสุดใหม่ทุกครั้ง)
+        return DB::transaction(function () use ($from, $allowed, $apply) {
+            // SQLite (ทดสอบ/พรีวิว) ไม่มี FOR UPDATE → เขียนก่อนอ่านเพื่อจองสิทธิ์เขียน
+            // ไม่งั้นสอง transaction อ่านพร้อมกันแล้วชนกันตอนเขียน (database is locked)
+            if ($this->getConnection()->getDriverName() === 'sqlite') {
+                DB::table($this->getTable())->where('id', $this->getKey())->update(['id' => DB::raw('id')]);
+            }
+
+            $fresh = self::query()->whereKey($this->getKey())->lockForUpdate()->first();
+
+            if (!$fresh) {
+                return false;
+            }
+
+            $this->setRawAttributes($fresh->getAttributes(), true);
+            $this->unsetRelation('items');
+            $this->unsetRelation('payments');
+            $this->unsetRelation('histories');
+
+            if (!in_array($this->status, $from, true) || ($allowed && !$allowed($this))) {
+                return false;
+            }
+
+            $apply();
+
+            return true;
+        }, 3);
+    }
+
     // ผู้ซื้อแนบสลิป → ตรวจสลิป (App\Services\SlipVerifier)
     // ผ่าน = ชำระแล้ว (รอร้านจัดส่ง) / ไม่ผ่าน = แนบใหม่ / ตรวจไม่ได้ = ร้านตรวจยอดเอง
-    public function attachSlip(UploadedFile $file): PaymentTransaction
+    // คืน null = คำสั่งซื้อเปลี่ยนสถานะระหว่างตรวจ ไม่ได้บันทึก (เช่น แนบสลิปซ้อนกัน 2 ครั้ง)
+    public function attachSlip(UploadedFile $file, ?Closure $allowed = null): ?PaymentTransaction
     {
+        // 1) ตรวจกับผู้ให้บริการตรวจสลิป (ใช้เวลาได้หลายวินาที) → ยังไม่ล็อกคำสั่งซื้อ
         $check = app(SlipVerifier::class)->check(
             (string) file_get_contents($file->getRealPath()),
             $file->getClientOriginalName() ?: 'slip.jpg',
             $this
         );
 
-        $payment = $this->payments()->create([
+        $record = fn () => $this->payments()->create([
             ...$check,
             'method' => $this->payment_method,
             'amount' => $this->total,
             'verified_at' => $check['status'] === PaymentTransaction::STATUS_VERIFIED ? now() : null,
         ]);
 
-        // สลิปไม่ผ่าน → ไม่เก็บรูป ให้แนบใหม่
-        if ($payment->status === PaymentTransaction::STATUS_REJECTED) {
-            $this->forceFill(['payment_note' => $payment->reason])->save();
+        $payment = null;
 
-            $this->recordStatus(self::BY_SYSTEM, 'สลิปไม่ผ่าน: ' . $payment->reason);
+        // สลิปไม่ผ่าน → ไม่เก็บรูป ให้แนบใหม่
+        if ($check['status'] === PaymentTransaction::STATUS_REJECTED) {
+            $this->transition([self::STATUS_AWAITING_PAYMENT], $allowed, function () use ($record, &$payment) {
+                $payment = $record();
+
+                $this->forceFill(['payment_note' => $payment->reason])->save();
+
+                $this->recordStatus(self::BY_SYSTEM, 'สลิปไม่ผ่าน: ' . $payment->reason);
+            });
 
             return $payment;
         }
 
+        // 2) เก็บรูปสลิป (อัปโหลดไปที่เก็บไฟล์) → ยังไม่ล็อก
         $path = $file->store('order_slips/' . $this->buyer_id, MediaStorage::disk())
             ?: throw new RuntimeException('Could not store the slip.');
 
-        $old = $this->slip_path;
+        $verified = $check['status'] === PaymentTransaction::STATUS_VERIFIED;
 
-        $verified = $payment->status === PaymentTransaction::STATUS_VERIFIED;
+        $old = null;
 
-        $this->forceFill([
-            'slip_path' => $path,
-            'slip_uploaded_at' => now(),
-            'paid_at' => $verified ? now() : null,
-            'payment_note' => null,
-            'payment_due_at' => null,
-            'status' => $verified ? self::STATUS_PREPARING : self::STATUS_PAYMENT_REVIEW,
-        ])->save();
+        // 3) ล็อกแล้วบันทึก: ยังรอชำระอยู่ → ชำระแล้ว / รอร้านตรวจยอด
+        $paid = $this->transition([self::STATUS_AWAITING_PAYMENT], $allowed, function () use ($record, $path, $verified, &$payment, &$old) {
+            $payment = $record();
+
+            $old = $this->slip_path;
+
+            $this->forceFill([
+                'slip_path' => $path,
+                'slip_uploaded_at' => now(),
+                'paid_at' => $verified ? now() : null,
+                'payment_note' => null,
+                'payment_due_at' => null,
+                'status' => $verified ? self::STATUS_PREPARING : self::STATUS_PAYMENT_REVIEW,
+            ])->save();
+
+            $this->recordStatus(
+                $verified ? self::BY_SYSTEM : self::BY_BUYER,
+                $verified ? 'ระบบตรวจสลิปแล้ว ชำระเงินสำเร็จ' : 'แนบสลิป · ' . $payment->reason
+            );
+        });
+
+        if ($paid) {
+            MediaStorage::delete([$old]);
+
+            $verified
+                ? $this->notifySeller(
+                    'ลูกค้าชำระเงินแล้ว',
+                    "คำสั่งซื้อ {$this->code} · " . self::baht($this->total) . ' ระบบตรวจสลิปแล้ว จัดส่งสินค้าได้เลย'
+                )
+                : $this->notifySeller(
+                    'ลูกค้าแนบสลิปแล้ว',
+                    "คำสั่งซื้อ {$this->code} · " . self::baht($this->total)
+                        . ' กรุณาเช็กยอดเงินในบัญชีแล้วกดยืนยันรับเงิน'
+                );
+
+            return $payment;
+        }
+
+        // ระหว่างตรวจสลิป คำสั่งซื้อถูกยกเลิก (หมดเวลาชำระ / ยกเลิก) แต่ลูกค้าโอนเงินมาแล้ว
+        // → เก็บหลักฐาน และให้ร้านตรวจยอดแล้วคืนเงิน (ไม่เปิดคำสั่งซื้อกลับ เพราะคืนสต็อกไปแล้ว)
+        $late = $this->transition(
+            [self::STATUS_CANCELLED],
+            fn () => $this->isTransfer() && $this->refund_status === null,
+            function () use ($record, $path, &$payment, &$old) {
+                $payment = $record();
+
+                $old = $this->slip_path;
+
+                $this->forceFill([
+                    'slip_path' => $path,
+                    'slip_uploaded_at' => now(),
+                    'refund_status' => self::REFUND_PENDING,
+                ])->save();
+
+                $this->recordStatus(self::BY_BUYER, 'แนบสลิปหลังคำสั่งซื้อถูกยกเลิก · รอร้านตรวจยอดและคืนเงิน');
+            }
+        );
+
+        if (!$late) {
+            MediaStorage::delete([$path]);
+
+            return null;
+        }
 
         MediaStorage::delete([$old]);
 
-        if ($verified) {
-            $this->recordStatus(self::BY_SYSTEM, 'ระบบตรวจสลิปแล้ว ชำระเงินสำเร็จ');
-
-            $this->notifySeller(
-                'ลูกค้าชำระเงินแล้ว',
-                "คำสั่งซื้อ {$this->code} · " . self::baht($this->total) . ' ระบบตรวจสลิปแล้ว จัดส่งสินค้าได้เลย'
-            );
-        } else {
-            $this->recordStatus(self::BY_BUYER, 'แนบสลิป · ' . $payment->reason);
-
-            $this->notifySeller(
-                'ลูกค้าแนบสลิปแล้ว',
-                "คำสั่งซื้อ {$this->code} · " . self::baht($this->total)
-                    . ' กรุณาเช็กยอดเงินในบัญชีแล้วกดยืนยันรับเงิน'
-            );
-        }
+        $this->notifySeller(
+            'ลูกค้าโอนเงินหลังคำสั่งซื้อถูกยกเลิก',
+            "คำสั่งซื้อ {$this->code} · " . self::baht($this->total)
+                . ' ลูกค้าแนบสลิปหลังคำสั่งซื้อถูกยกเลิก กรุณาเช็กยอดเงิน แล้วคืนเงินให้ลูกค้าและกด "คืนเงินแล้ว"'
+        );
 
         return $payment;
     }
 
     // ร้านเช็กยอดในบัญชีแล้ว (ตอนตรวจสลิปอัตโนมัติไม่ได้)
-    public function confirmPayment(): void
+    public function confirmPayment(?Closure $allowed = null): bool
     {
-        $this->payments()->where('status', PaymentTransaction::STATUS_REVIEW)->update([
-            'status' => PaymentTransaction::STATUS_CONFIRMED,
-            'reason' => null,
-            'verified_at' => now(),
-        ]);
+        $done = $this->transition([self::STATUS_PAYMENT_REVIEW], $allowed, function () {
+            $this->payments()->where('status', PaymentTransaction::STATUS_REVIEW)->update([
+                'status' => PaymentTransaction::STATUS_CONFIRMED,
+                'reason' => null,
+                'verified_at' => now(),
+            ]);
 
-        $this->forceFill([
-            'status' => self::STATUS_PREPARING,
-            'paid_at' => now(),
-        ])->save();
+            $this->forceFill([
+                'status' => self::STATUS_PREPARING,
+                'paid_at' => now(),
+            ])->save();
 
-        $this->recordStatus(self::BY_SELLER, 'ร้านยืนยันว่าได้รับเงินแล้ว');
+            $this->recordStatus(self::BY_SELLER, 'ร้านยืนยันว่าได้รับเงินแล้ว');
+        });
 
-        $this->notifyBuyer('ร้านได้รับเงินแล้ว', "คำสั่งซื้อ {$this->code} รอร้านจัดส่งสินค้า");
+        if ($done) {
+            $this->notifyBuyer('ร้านได้รับเงินแล้ว', "คำสั่งซื้อ {$this->code} รอร้านจัดส่งสินค้า");
+        }
+
+        return $done;
     }
 
     // ร้านเช็กแล้วเงินไม่เข้า → ผู้ซื้อแนบสลิปใหม่ (นับเวลาชำระใหม่)
-    public function rejectSlip(string $reason): void
+    public function rejectSlip(string $reason, ?Closure $allowed = null): bool
     {
-        $this->payments()->where('status', PaymentTransaction::STATUS_REVIEW)->update([
-            'status' => PaymentTransaction::STATUS_REJECTED,
-            'reason' => $reason,
-        ]);
+        $done = $this->transition([self::STATUS_PAYMENT_REVIEW], $allowed, function () use ($reason) {
+            $this->payments()->where('status', PaymentTransaction::STATUS_REVIEW)->update([
+                'status' => PaymentTransaction::STATUS_REJECTED,
+                'reason' => $reason,
+            ]);
 
-        $this->forceFill([
-            'status' => self::STATUS_AWAITING_PAYMENT,
-            'paid_at' => null,
-            'payment_note' => $reason,
-            'payment_due_at' => now()->addHours(config('market.order_payment_hours')),
-        ])->save();
+            $this->forceFill([
+                'status' => self::STATUS_AWAITING_PAYMENT,
+                'paid_at' => null,
+                'payment_note' => $reason,
+                'payment_due_at' => now()->addHours(config('market.order_payment_hours')),
+            ])->save();
 
-        $this->recordStatus(self::BY_SELLER, 'สลิปไม่ถูกต้อง: ' . $reason);
+            $this->recordStatus(self::BY_SELLER, 'สลิปไม่ถูกต้อง: ' . $reason);
+        });
 
-        $this->notifyBuyer('ร้านแจ้งว่าสลิปไม่ถูกต้อง', $reason . ' (แนบสลิปใหม่ได้ในคำสั่งซื้อ)');
+        if ($done) {
+            $this->notifyBuyer('ร้านแจ้งว่าสลิปไม่ถูกต้อง', $reason . ' (แนบสลิปใหม่ได้ในคำสั่งซื้อ)');
+        }
+
+        return $done;
     }
 
     // carrier = key ใน config market.carriers (รับที่ร้าน / นัดรับ ไม่มี)
-    public function ship(?string $trackingNumber, ?string $sellerNote, ?string $carrier = null): void
+    public function ship(?string $trackingNumber, ?string $sellerNote, ?string $carrier = null, ?Closure $allowed = null): bool
     {
-        $this->forceFill([
-            'status' => self::STATUS_SHIPPED,
-            'shipped_at' => now(),
-            'carrier' => $carrier,
-            'tracking_number' => $trackingNumber,
-            'seller_note' => $sellerNote,
-        ])->save();
+        $shipping = '';
 
-        // "Flash Express · เลขพัสดุ TH123"
-        $shipping = collect([
-            $this->carrierLabel(),
-            $trackingNumber ? "เลขพัสดุ {$trackingNumber}" : null,
-        ])->filter()->join(' · ');
+        $done = $this->transition([self::STATUS_PREPARING], $allowed, function () use ($trackingNumber, $sellerNote, $carrier, &$shipping) {
+            $this->forceFill([
+                'status' => self::STATUS_SHIPPED,
+                'shipped_at' => now(),
+                'carrier' => $carrier,
+                'tracking_number' => $trackingNumber,
+                'seller_note' => $sellerNote,
+            ])->save();
 
-        $this->recordStatus(self::BY_SELLER, $shipping !== '' ? $shipping : null);
+            // "Flash Express · เลขพัสดุ TH123"
+            $shipping = collect([
+                $this->carrierLabel(),
+                $trackingNumber ? "เลขพัสดุ {$trackingNumber}" : null,
+            ])->filter()->join(' · ');
 
-        $this->notifyBuyer(
-            $this->isHandover() ? 'ร้านส่งมอบสินค้าแล้ว' : 'ร้านส่งสินค้าแล้ว',
-            '"' . $this->product_title . '"'
-                . ($shipping !== '' ? " · {$shipping}" : '')
-                . ' ได้รับแล้วกด "ได้รับสินค้าแล้ว" ในคำสั่งซื้อ'
-        );
+            $this->recordStatus(self::BY_SELLER, $shipping !== '' ? $shipping : null);
+        });
+
+        if ($done) {
+            $this->notifyBuyer(
+                $this->isHandover() ? 'ร้านส่งมอบสินค้าแล้ว' : 'ร้านส่งสินค้าแล้ว',
+                '"' . $this->product_title . '"'
+                    . ($shipping !== '' ? " · {$shipping}" : '')
+                    . ' ได้รับแล้วกด "ได้รับสินค้าแล้ว" ในคำสั่งซื้อ'
+            );
+        }
+
+        return $done;
     }
 
     public function carrierLabel(): ?string
@@ -480,51 +609,69 @@ class Order extends Model
     }
 
     // ร้านคืนเงินให้ลูกค้าแล้ว (คำสั่งซื้อที่ยกเลิกหลังจ่ายเงิน)
-    public function markRefunded(string $note): void
+    public function markRefunded(string $note, ?Closure $allowed = null): bool
     {
-        $this->forceFill([
-            'refund_status' => self::REFUND_DONE,
-            'refund_note' => $note,
-            'refunded_at' => now(),
-        ])->save();
+        $done = $this->transition(
+            [self::STATUS_CANCELLED],
+            fn () => $this->refund_status === self::REFUND_PENDING && (!$allowed || $allowed($this)),
+            function () use ($note) {
+                $this->forceFill([
+                    'refund_status' => self::REFUND_DONE,
+                    'refund_note' => $note,
+                    'refunded_at' => now(),
+                ])->save();
 
-        $this->recordStatus(self::BY_SELLER, 'คืนเงินแล้ว: ' . $note);
-
-        $this->notifyBuyer(
-            'ร้านคืนเงินให้คุณแล้ว',
-            'คำสั่งซื้อ ' . $this->code . ' คืน ' . self::baht($this->total) . ' · ' . $note
-                . ' (ยังไม่ได้รับเงิน แชทกับร้านได้ในคำสั่งซื้อ)'
+                $this->recordStatus(self::BY_SELLER, 'คืนเงินแล้ว: ' . $note);
+            }
         );
+
+        if ($done) {
+            $this->notifyBuyer(
+                'ร้านคืนเงินให้คุณแล้ว',
+                'คำสั่งซื้อ ' . $this->code . ' คืน ' . self::baht($this->total) . ' · ' . $note
+                    . ' (ยังไม่ได้รับเงิน แชทกับร้านได้ในคำสั่งซื้อ)'
+            );
+        }
+
+        return $done;
     }
 
     // ผู้ซื้อได้รับสินค้า (by = system เมื่อครบกำหนดแล้วผู้ซื้อไม่ได้กด)
-    public function complete(string $by = self::BY_BUYER): void
+    public function complete(string $by = self::BY_BUYER, ?Closure $allowed = null): bool
     {
-        $this->forceFill([
-            'status' => self::STATUS_COMPLETED,
-            'completed_at' => now(),
-            // เก็บเงินปลายทาง / เงินสด: จ่ายตอนรับของ
-            'paid_at' => $this->paid_at ?? now(),
-        ])->save();
+        $done = $this->transition([self::STATUS_SHIPPED], $allowed, function () use ($by) {
+            $this->forceFill([
+                'status' => self::STATUS_COMPLETED,
+                'completed_at' => now(),
+                // เก็บเงินปลายทาง / เงินสด: จ่ายตอนรับของ
+                'paid_at' => $this->paid_at ?? now(),
+            ])->save();
 
-        $this->recordStatus($by, $by === self::BY_SYSTEM ? 'ครบกำหนด ระบบยืนยันรับสินค้าให้' : 'ได้รับสินค้าแล้ว');
+            $this->recordStatus($by, $by === self::BY_SYSTEM ? 'ครบกำหนด ระบบยืนยันรับสินค้าให้' : 'ได้รับสินค้าแล้ว');
+        });
 
-        $this->notifySeller(
-            'คำสั่งซื้อสำเร็จ',
-            $by === self::BY_SYSTEM
-                ? "คำสั่งซื้อ {$this->code} ครบกำหนดยืนยันรับสินค้าแล้ว"
-                : "ลูกค้าได้รับ \"{$this->product_title}\" แล้ว"
-        );
+        if ($done) {
+            $this->notifySeller(
+                'คำสั่งซื้อสำเร็จ',
+                $by === self::BY_SYSTEM
+                    ? "คำสั่งซื้อ {$this->code} ครบกำหนดยืนยันรับสินค้าแล้ว"
+                    : "ลูกค้าได้รับ \"{$this->product_title}\" แล้ว"
+            );
+        }
+
+        return $done;
     }
 
-    // ยกเลิก + คืนสต็อก แล้วแจ้งอีกฝ่าย
-    public function cancel(string $by, ?string $reason): void
+    // ยกเลิก + คืนสต็อก (ครั้งเดียว) แล้วแจ้งอีกฝ่าย
+    public function cancel(string $by, ?string $reason, ?Closure $allowed = null): bool
     {
-        // โอนแล้ว (ระบบ/ร้านยืนยันแล้ว หรือส่งสลิปรอร้านตรวจ) → ร้านต้องคืนเงิน
-        $paid = $this->isTransfer()
-            && ($this->paid_at !== null || $this->status === self::STATUS_PAYMENT_REVIEW);
+        $paid = false;
 
-        DB::transaction(function () use ($by, $reason, $paid) {
+        $done = $this->transition(self::CANCELLABLE_STATUSES, $allowed, function () use ($by, $reason, &$paid) {
+            // โอนแล้ว (ระบบ/ร้านยืนยันแล้ว หรือส่งสลิปรอร้านตรวจ) → ร้านต้องคืนเงิน
+            $paid = $this->isTransfer()
+                && ($this->paid_at !== null || $this->status === self::STATUS_PAYMENT_REVIEW);
+
             $this->forceFill([
                 'status' => self::STATUS_CANCELLED,
                 'cancelled_at' => now(),
@@ -538,6 +685,10 @@ class Order extends Model
 
             $this->recordStatus($by, $reason);
         });
+
+        if (!$done) {
+            return false;
+        }
 
         $message = "คำสั่งซื้อ {$this->code} \"{$this->product_title}\"" . ($reason ? " · {$reason}" : '');
 
@@ -554,25 +705,75 @@ class Order extends Model
                 $message . ($paid ? ' · ลูกค้าโอนเงินแล้ว กรุณาคืนเงินให้ลูกค้า แล้วกด "คืนเงินแล้ว"' : '')
             );
         }
+
+        return true;
     }
 
     // =====================================================
-    // ครบกำหนดเวลา (เรียกก่อนแสดงรายการ ไม่ต้องตั้งเวลาบนเซิร์ฟเวอร์)
+    // ครบกำหนดเวลา
+    // - เลยเวลาชำระ → ยกเลิก + คืนสต็อก / ส่งแล้วครบกำหนด → ระบบยืนยันรับสินค้า
+    // - งานตามเวลา: php artisan orders:expire (ทุกนาที routes/console.php) ทำทั้งระบบเป็นชุด
+    // - ก่อนแสดงคำสั่งซื้อ: ทำเฉพาะคำสั่งซื้อที่กำลังเปิด (scope) เผื่อ Scheduler ยังไม่ทำงาน
+    // รันซ้อนกันได้อย่างปลอดภัย: transition() ล็อกแถวและตรวจเวลาซ้ำ → ทำครั้งเดียว
+    // คืน ['cancelled' => n, 'completed' => n, 'more' => ยังเหลือในรอบถัดไป]
     // =====================================================
 
-    public static function expireStale(): void
+    public static function expireStale(?Closure $scope = null, int $limit = 100): array
     {
         $now = now();
+        $cutoff = $now->copy()->subDays(config('market.order_auto_complete_days'));
 
-        self::where('status', self::STATUS_AWAITING_PAYMENT)
+        $unpaid = self::query()
+            ->when($scope, $scope)
+            ->where('status', self::STATUS_AWAITING_PAYMENT)
             ->where('payment_due_at', '<', $now)
-            ->get()
-            ->each(fn (Order $order) => $order->cancel(self::BY_SYSTEM, 'ไม่ได้แนบสลิปภายในเวลาที่กำหนด'));
+            ->orderBy('id')
+            ->limit($limit)
+            ->get();
 
-        self::where('status', self::STATUS_SHIPPED)
-            ->where('shipped_at', '<', $now->copy()->subDays(config('market.order_auto_complete_days')))
-            ->get()
-            ->each(fn (Order $order) => $order->complete(self::BY_SYSTEM));
+        $delivered = self::query()
+            ->when($scope, $scope)
+            ->where('status', self::STATUS_SHIPPED)
+            ->where('shipped_at', '<', $cutoff)
+            ->orderBy('id')
+            ->limit($limit)
+            ->get();
+
+        $result = [
+            'cancelled' => 0,
+            'completed' => 0,
+            'more' => $unpaid->count() >= $limit || $delivered->count() >= $limit,
+        ];
+
+        foreach ($unpaid as $order) {
+            $result['cancelled'] += (int) self::safely($order, fn () => $order->cancel(
+                self::BY_SYSTEM,
+                'ไม่ได้แนบสลิปภายในเวลาที่กำหนด',
+                // ระหว่างนี้แนบสลิปแล้ว / ร้านให้แนบใหม่ (เลื่อนเวลาชำระ) → ไม่ยกเลิก
+                fn (Order $fresh) => $fresh->payment_due_at?->lt($now) ?? false
+            ));
+        }
+
+        foreach ($delivered as $order) {
+            $result['completed'] += (int) self::safely($order, fn () => $order->complete(
+                self::BY_SYSTEM,
+                fn (Order $fresh) => $fresh->shipped_at?->lt($cutoff) ?? false
+            ));
+        }
+
+        return $result;
+    }
+
+    // คำสั่งซื้อหนึ่งรายการล้ม (เช่น deadlock ซ้ำหลายครั้ง) → บันทึก log แล้วทำรายการอื่นต่อ
+    private static function safely(Order $order, Closure $work): bool
+    {
+        try {
+            return (bool) $work();
+        } catch (\Throwable $e) {
+            Log::error('Order expiry failed', ['order_id' => $order->id, 'error' => $e->getMessage()]);
+
+            return false;
+        }
     }
 
     // =====================================================
