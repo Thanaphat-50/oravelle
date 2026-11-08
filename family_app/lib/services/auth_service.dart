@@ -214,4 +214,44 @@ class AuthService {
       AppLog.warn('Logout request failed', e.runtimeType);
     }
   }
+
+  // =====================================================
+  // ลืมรหัสผ่าน (ยังไม่ได้เข้าสู่ระบบ → session: false)
+  // 1) ขอรหัส 6 หลักทางอีเมล (ตอบข้อความเดียวกันเสมอ ไม่บอกว่ามีบัญชีหรือไม่)
+  // 2) ตั้งรหัสผ่านใหม่ด้วยรหัสนั้น
+  // =====================================================
+
+  static Future<Map<String, dynamic>> requestPasswordCode(String email) async {
+    final response = await ApiHelper.request(
+      () => http.post(
+        Uri.parse('$baseUrl/password/forgot'),
+        headers: _jsonHeaders,
+        body: jsonEncode({'email': email}),
+      ),
+    );
+
+    return ApiHelper.decode(response, session: false);
+  }
+
+  static Future<Map<String, dynamic>> resetPassword({
+    required String email,
+    required String code,
+    required String password,
+    required String passwordConfirmation,
+  }) async {
+    final response = await ApiHelper.request(
+      () => http.post(
+        Uri.parse('$baseUrl/password/reset'),
+        headers: _jsonHeaders,
+        body: jsonEncode({
+          'email': email,
+          'code': code,
+          'password': password,
+          'password_confirmation': passwordConfirmation,
+        }),
+      ),
+    );
+
+    return ApiHelper.decode(response, session: false);
+  }
 }

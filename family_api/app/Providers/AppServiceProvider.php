@@ -50,6 +50,27 @@ class AppServiceProvider extends ServiceProvider
         });
 
         // =====================================================
+        // Rate Limit: ลืมรหัสผ่าน (ขอรหัส / ตั้งรหัสใหม่)
+        //
+        // - Email เดียวกันจาก IP เดียวกัน 5 ครั้ง/นาที (กันเดารหัส 6 หลัก + ส่งอีเมลรัว)
+        // - IP เดียวกัน 20 ครั้ง/ชั่วโมง (กันไล่ขอรหัสหลายบัญชี)
+        // =====================================================
+
+        RateLimiter::for('password-reset', function (Request $request) {
+            $email = Str::lower(trim((string) $request->input('email')));
+
+            return [
+                Limit::perMinute(5)
+                    ->by('password-reset-email:' . $email . '|' . $request->ip())
+                    ->response($this->tooManyAttempts(...)),
+
+                Limit::perHour(20)
+                    ->by('password-reset-ip:' . $request->ip())
+                    ->response($this->tooManyAttempts(...)),
+            ];
+        });
+
+        // =====================================================
         // Rate Limit: Register
         //
         // - IP เดียวกัน สมัครได้ 5 ครั้ง/นาที

@@ -352,7 +352,7 @@ class _RegisterPageState
                             decoration:
                                 const InputDecoration(
                               labelText:
-                                  'Email',
+                                  'อีเมล',
                               hintText:
                                   'example@email.com',
                               prefixIcon:
@@ -378,7 +378,7 @@ class _RegisterPageState
                             decoration:
                                 InputDecoration(
                               labelText:
-                                  'Password',
+                                  'รหัสผ่าน',
                               helperText:
                                   'อย่างน้อย 8 ตัวอักษร',
                               prefixIcon:
@@ -429,7 +429,7 @@ class _RegisterPageState
                             decoration:
                                 InputDecoration(
                               labelText:
-                                  'ยืนยัน Password',
+                                  'ยืนยันรหัสผ่าน',
                               prefixIcon:
                                   const Icon(
                                 Icons

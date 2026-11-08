@@ -8,6 +8,7 @@ import '../widgets/social_login_buttons.dart';
 import '../theme/app_theme.dart';
 import '../widgets/orbit_background.dart';
 
+import 'forgot_password_page.dart';
 import 'home_page.dart';
 import 'register_page.dart';
 
@@ -252,6 +253,25 @@ class _LoginPageState
       MaterialPageRoute(builder: (_) => HomePage(userName: userName)),
       (route) => false,
     );
+  }
+
+  // ตั้งรหัสผ่านใหม่สำเร็จ → กลับมาพร้อมอีเมล ให้กรอกรหัสผ่านใหม่
+  Future<void> openForgotPassword() async {
+    final String? email = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => ForgotPasswordPage(
+          email: emailController.text.trim(),
+        ),
+      ),
+    );
+
+    if (email == null || !mounted) return;
+
+    emailController.text = email;
+    passwordController.clear();
+    passwordFocus.requestFocus();
+
+    showMessage('ตั้งรหัสผ่านใหม่แล้ว เข้าสู่ระบบด้วยรหัสผ่านใหม่ได้เลย');
   }
 
   Future<void> login() async {
@@ -528,7 +548,7 @@ class _LoginPageState
                             decoration:
                                 const InputDecoration(
                               labelText:
-                                  'Email',
+                                  'อีเมล',
                               hintText:
                                   'example@email.com',
                               prefixIcon:
@@ -567,7 +587,7 @@ class _LoginPageState
                             decoration:
                                 InputDecoration(
                               labelText:
-                                  'Password',
+                                  'รหัสผ่าน',
                               prefixIcon:
                                   const Icon(
                                 Icons
@@ -595,8 +615,20 @@ class _LoginPageState
                             ),
                           ),
 
+                          // ลืมรหัสผ่าน → ขอรหัส 6 หลักทางอีเมล
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              style: TextButton.styleFrom(
+                                minimumSize: const Size(0, 44),
+                              ),
+                              onPressed: isLoading ? null : openForgotPassword,
+                              child: const Text('ลืมรหัสผ่าน?'),
+                            ),
+                          ),
+
                           const SizedBox(
-                            height: 22,
+                            height: 6,
                           ),
 
                           ElevatedButton(

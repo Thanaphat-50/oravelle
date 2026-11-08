@@ -29,6 +29,7 @@ use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SocialAuthController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\PasswordResetController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -47,6 +48,13 @@ Route::post('/register', [AuthController::class, 'register'])
 
 Route::post('/login', [AuthController::class, 'login'])
     ->middleware('throttle:login');
+
+// ลืมรหัสผ่าน: ขอรหัส 6 หลักทางอีเมล → ตั้งรหัสผ่านใหม่ (PasswordResetController)
+Route::post('/password/forgot', [PasswordResetController::class, 'forgot'])
+    ->middleware('throttle:password-reset');
+
+Route::post('/password/reset', [PasswordResetController::class, 'reset'])
+    ->middleware('throttle:password-reset');
 
 // เข้าสู่ระบบ / สมัคร ด้วย Google, LINE, Facebook
 Route::get('/auth/providers', [SocialAuthController::class, 'providers']);
