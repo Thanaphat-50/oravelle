@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../config/app_info.dart';
+import '../services/api_helper.dart';
 import '../services/auth_service.dart';
 import '../services/social_auth_service.dart';
 import '../widgets/social_login_buttons.dart';
@@ -12,8 +13,12 @@ import 'register_page.dart';
 
 class LoginPage
     extends StatefulWidget {
+  // ข้อความแจ้งตอนเปิดหน้า เช่น "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่"
+  final String? notice;
+
   const LoginPage({
     super.key,
+    this.notice,
   });
 
   @override
@@ -33,6 +38,19 @@ class _LoginPageState
 
   bool isLoading = false;
   bool obscurePassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+
+    final String? notice = widget.notice;
+
+    if (notice != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) showMessage(notice);
+      });
+    }
+  }
 
   // กำลังเข้าสู่ระบบด้วย Google / LINE / Facebook
   SocialProvider? socialBusy;
@@ -63,7 +81,7 @@ class _LoginPageState
     } on SocialLoginCanceled {
       // ผู้ใช้ปิดหน้าล็อกอินเอง
     } catch (e) {
-      if (mounted) showMessage(e.toString());
+      if (mounted) showMessage(ApiHelper.messageOf(e));
     } finally {
       if (mounted) setState(() => socialBusy = null);
     }
@@ -215,7 +233,7 @@ class _LoginPageState
           message = 'ยังไม่ได้เชื่อม ${provider.label} '
               'เชื่อมภายหลังได้ที่ ตั้งค่า → บัญชีที่เชื่อมต่อ';
         } catch (e) {
-          message = e.toString();
+          message = ApiHelper.messageOf(e);
         }
 
         if (mounted) showMessage(message);
@@ -246,7 +264,7 @@ class _LoginPageState
     if (email.isEmpty ||
         password.isEmpty) {
       showMessage(
-        'กรุณากรอก Email และ Password',
+        'กรุณากรอกอีเมลและรหัสผ่าน',
       );
       return;
     }
@@ -272,16 +290,15 @@ class _LoginPageState
         await finishSignIn(result['user']);
       } else {
         showMessage(
-          result['message'] ??
-              'Email หรือ Password ไม่ถูกต้อง',
+          result['message']?.toString() ??
+              'อีเมลหรือรหัสผ่านไม่ถูกต้อง',
         );
       }
-    } catch (_) {
+    } catch (e) {
+      // เน็ตล่ม / หมดเวลารอ / เซิร์ฟเวอร์ผิดพลาด → ข้อความภาษาไทยจาก ApiHelper
       if (!mounted) return;
 
-      showMessage(
-        'ไม่สามารถเชื่อมต่อ Server ได้',
-      );
+      showMessage(ApiHelper.messageOf(e));
     } finally {
       if (mounted) {
         setState(() {

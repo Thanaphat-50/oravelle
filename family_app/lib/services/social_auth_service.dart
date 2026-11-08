@@ -249,7 +249,8 @@ class SocialAuthService {
       ),
     );
 
-    final result = ApiHelper.decode(response);
+    // ยังไม่ได้เข้าสู่ระบบ → 401 ไม่ใช่ "เซสชันหมดอายุ"
+    final result = ApiHelper.decode(response, session: false);
 
     final dynamic token = result['token'];
 

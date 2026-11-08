@@ -120,3 +120,7 @@ jobs:
 
       - name: Analyze
         run: flutter analyze
+
+      # ทดสอบการเชื่อมต่อ / เข้าสู่ระบบ (test/services)
+      - name: Test
+        run: flutter test

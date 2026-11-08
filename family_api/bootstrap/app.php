@@ -3,6 +3,8 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
+use App\Support\ApiErrors;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -15,5 +17,6 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        // API: ข้อผิดพลาดเป็นภาษาไทย ไม่ส่งข้อความภายในของ Laravel ให้ผู้ใช้ (App\Support\ApiErrors)
+        $exceptions->render(fn (Throwable $e, Request $request) => ApiErrors::render($e, $request));
     })->create();

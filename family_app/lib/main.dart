@@ -2,6 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'config/app_info.dart';
 import 'pages/home_page.dart';
@@ -24,7 +25,9 @@ Future<void> main() async {
   await setUpFirebase();
 
   // ===============================================
-  // Token หมดอายุ
+  // Token หมดอายุ / ไม่ถูกต้อง (API ตอบ 401 ระหว่างใช้งาน)
+  // → ลบ token แล้วไปหน้าเข้าสู่ระบบ พร้อมบอกเหตุผล
+  // (เน็ตล่ม / เซิร์ฟเวอร์ผิดพลาด ไม่มาที่นี่ token ยังอยู่)
   // ===============================================
 
   ApiHelper.onUnauthorized = () async {
@@ -36,7 +39,13 @@ Future<void> main() async {
       return;
     }
 
-    navigator.pushNamedAndRemoveUntil('/login', (route) => false);
+    navigator.pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) =>
+            const LoginPage(notice: ApiHelper.sessionExpiredMessage),
+      ),
+      (route) => false,
+    );
   };
 
   // โหมดสีที่เลือกไว้ (ตามเครื่อง / สว่าง / มืด)
@@ -177,7 +186,12 @@ class _FamilyOrbitAppState extends State<FamilyOrbitApp>
 }
 
 // =======================================================
-// ตรวจ Login ตอนเปิดแอป
+// ตรวจ Login ตอนเปิดแอป (AuthService.checkSession)
+// - ไม่มี token → หน้าเข้าสู่ระบบ
+// - token ใช้ได้ → หน้าแรก
+// - token หมดอายุ (401) → หน้าเข้าสู่ระบบ + บอกว่าเซสชันหมดอายุ
+// - มี token แต่เน็ตล่ม / เซิร์ฟเวอร์ผิดพลาด → หน้า "ลองอีกครั้ง" (ยังไม่ออกจากระบบ)
+// รอไม่เกินเวลาของ ApiHelper.timeout ไม่มีหน้ารอไม่สิ้นสุด
 // =======================================================
 
 class AuthCheckPage extends StatefulWidget {
@@ -188,9 +202,10 @@ class AuthCheckPage extends StatefulWidget {
 }
 
 class _AuthCheckPageState extends State<AuthCheckPage> {
-  bool isChecking = true;
+  // null = กำลังตรวจ
+  SessionCheck? session;
 
-  Map<String, dynamic>? user;
+  bool isSigningOut = false;
 
   @override
   void initState() {
@@ -200,33 +215,67 @@ class _AuthCheckPageState extends State<AuthCheckPage> {
   }
 
   Future<void> checkLogin() async {
-    final token = await AuthService.getToken();
-
-    if (token == null) {
-      if (!mounted) return;
-
-      setState(() {
-        isChecking = false;
-        user = null;
-      });
-
-      return;
+    if (session != null) {
+      setState(() => session = null);
     }
 
-    final currentUser = await AuthService.getCurrentUser();
+    final SessionCheck result = await AuthService.checkSession();
+
+    if (!mounted) return;
+
+    setState(() => session = result);
+  }
+
+  // ออกจากระบบตอนเชื่อมต่อไม่ได้ (ลบ token ในเครื่องทันที)
+  Future<void> signOut() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('ออกจากระบบ?'),
+        content: const Text(
+          'ต้องเข้าสู่ระบบใหม่เมื่อกลับมาใช้งาน\n'
+          'ถ้าแค่เน็ตไม่ดี กด "ลองอีกครั้ง" ได้โดยไม่ต้องออกจากระบบ',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('ยกเลิก'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('ออกจากระบบ'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => isSigningOut = true);
+
+    await AuthService.logout();
 
     if (!mounted) return;
 
     setState(() {
-      user = currentUser;
-      isChecking = false;
+      isSigningOut = false;
+      session = const SessionCheck(SessionState.signedOut);
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (isChecking) {
-      return Scaffold(
+  // หน้านี้ไม่มี AppBar → กำหนดสีไอคอนแถบสถานะเอง (ต่อจากหน้า Splash ที่เป็นพื้นเข้ม)
+  Widget withStatusBar(Widget child) {
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: AppColors.isDark
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
+      child: child,
+    );
+  }
+
+  Widget buildChecking() {
+    return withStatusBar(
+      Scaffold(
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -254,15 +303,120 @@ class _AuthCheckPageState extends State<AuthCheckPage> {
             ],
           ),
         ),
-      );
+      ),
+    );
+  }
+
+  Widget buildRetry(SessionCheck result) {
+    final bool offline = result.state == SessionState.offline;
+
+    // หัวข้อบอกปัญหาแล้ว → ข้อความด้านล่างบอกสิ่งที่ทำได้ (ไม่พูดซ้ำ)
+    final String detail = switch (result.message) {
+      ApiHelper.networkMessage =>
+        'ตรวจสอบอินเทอร์เน็ตหรือ Wi-Fi แล้วลองอีกครั้ง',
+      ApiHelper.serverMessage => 'กรุณาลองใหม่อีกสักครู่',
+      null => 'กรุณาลองอีกครั้ง',
+      final String message => message,
+    };
+
+    return withStatusBar(
+      Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const AppLogo(size: 64),
+
+                  const SizedBox(height: 24),
+
+                  Icon(
+                    offline ? Icons.wifi_off_rounded : Icons.cloud_off_rounded,
+                    size: 44,
+                    color: AppColors.muted,
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  Text(
+                    offline ? 'เชื่อมต่อไม่ได้' : 'ระบบขัดข้องชั่วคราว',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  Text(
+                    detail,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  Text(
+                    'บัญชีของคุณยังเข้าสู่ระบบอยู่',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: AppColors.subtle, fontSize: 13),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(200, 48),
+                    ),
+                    onPressed: isSigningOut ? null : checkLogin,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('ลองอีกครั้ง'),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  TextButton(
+                    style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+                    onPressed: isSigningOut ? null : signOut,
+                    child: Text(
+                      isSigningOut ? 'กำลังออกจากระบบ...' : 'ออกจากระบบ',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final SessionCheck? result = session;
+
+    if (result == null) {
+      return buildChecking();
     }
 
-    if (user == null) {
-      return const LoginPage();
+    switch (result.state) {
+      case SessionState.signedIn:
+        return HomePage(userName: result.user?['name']?.toString() ?? 'User');
+      case SessionState.signedOut:
+        return const LoginPage();
+      case SessionState.expired:
+        return LoginPage(notice: result.message);
+      case SessionState.offline:
+      case SessionState.serverError:
+        return buildRetry(result);
     }
-
-    final String userName = user?['name']?.toString() ?? 'User';
-
-    return HomePage(userName: userName);
   }
 }

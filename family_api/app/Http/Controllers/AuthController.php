@@ -15,6 +15,15 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
+        ], [
+            'name.required' => 'กรุณาใส่ชื่อ',
+            'name.max' => 'ชื่อยาวได้ไม่เกิน 255 ตัวอักษร',
+            'email.required' => 'กรุณาใส่อีเมล',
+            'email.email' => 'รูปแบบอีเมลไม่ถูกต้อง',
+            'email.unique' => 'อีเมลนี้มีบัญชีอยู่แล้ว กรุณาเข้าสู่ระบบ หรือใช้อีเมลอื่น',
+            'password.required' => 'กรุณาตั้งรหัสผ่าน',
+            'password.min' => 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร',
+            'password.confirmed' => 'ยืนยันรหัสผ่านไม่ตรงกัน',
         ]);
 
         $user = User::create([
@@ -27,7 +36,7 @@ class AuthController extends Controller
 
         return response()->json([
             'status' => true,
-            'message' => 'Register successful',
+            'message' => 'สมัครสมาชิกสำเร็จ',
             'user' => $user,
             'token' => $token,
         ], 201);
@@ -38,13 +47,17 @@ class AuthController extends Controller
         $data = $request->validate([
             'email' => 'required|email',
             'password' => 'required',
+        ], [
+            'email.required' => 'กรุณาใส่อีเมล',
+            'email.email' => 'รูปแบบอีเมลไม่ถูกต้อง',
+            'password.required' => 'กรุณาใส่รหัสผ่าน',
         ]);
 
         $user = User::where('email', $data['email'])->first();
 
         if (!$user || !Hash::check($data['password'], $user->password)) {
             throw ValidationException::withMessages([
-                'email' => ['Email or password is incorrect.'],
+                'email' => ['อีเมลหรือรหัสผ่านไม่ถูกต้อง'],
             ]);
         }
 
@@ -52,7 +65,7 @@ class AuthController extends Controller
 
         return response()->json([
             'status' => true,
-            'message' => 'Login successful',
+            'message' => 'เข้าสู่ระบบสำเร็จ',
             'user' => $user,
             'token' => $token,
         ]);
@@ -64,7 +77,7 @@ class AuthController extends Controller
 
         return response()->json([
             'status' => true,
-            'message' => 'Logout successful',
+            'message' => 'ออกจากระบบแล้ว',
         ]);
     }
 }

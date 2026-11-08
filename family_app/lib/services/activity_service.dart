@@ -13,19 +13,14 @@ class ActivityService {
   // HEADERS
   // =====================================================
 
-  static Future<Map<String, String>>
-      _headers() async {
-    final token =
-        await AuthService.getToken();
+  static Future<Map<String, String>> _headers() async {
+    final token = await AuthService.getToken();
 
     return {
       'Accept': 'application/json',
-      'Content-Type':
-          'application/json',
+      'Content-Type': 'application/json',
 
-      if (token != null)
-        'Authorization':
-            'Bearer $token',
+      if (token != null) 'Authorization': 'Bearer $token',
     };
   }
 
@@ -33,143 +28,114 @@ class ActivityService {
   // GET ACTIVITIES
   // =====================================================
 
-  static Future<Map<String, dynamic>>
-      getActivities() async {
-    final response =
-        await http.get(
-      Uri.parse(
-        '$baseUrl/activities',
-      ),
+  static Future<Map<String, dynamic>> getActivities() async {
+    final headers = await _headers();
 
-      headers:
-          await _headers(),
+    final response = await ApiHelper.request(
+      () => http.get(Uri.parse('$baseUrl/activities'), headers: headers),
     );
 
-    return ApiHelper.decode(
-      response,
-    );
+    return ApiHelper.decode(response);
   }
 
   // =====================================================
   // CREATE
   // =====================================================
 
-  static Future<Map<String, dynamic>>
-      createActivity({
+  static Future<Map<String, dynamic>> createActivity({
     required String title,
     String? description,
     DateTime? activityDate,
     String visibility = 'private',
   }) async {
-    final response =
-        await http.post(
-      Uri.parse(
-        '$baseUrl/activities',
-      ),
+    final headers = await _headers();
 
-      headers:
-          await _headers(),
+    final response = await ApiHelper.request(
+      () => http.post(
+        Uri.parse('$baseUrl/activities'),
 
-      body: jsonEncode(
-        {
-          'title':
-              title,
+        headers: headers,
 
-          'description':
-              description,
+        body: jsonEncode({
+          'title': title,
 
-          'activity_date':
-              activityDate
-                  ?.toIso8601String(),
+          'description': description,
 
-          'visibility':
-              visibility,
-        },
+          'activity_date': activityDate?.toIso8601String(),
+
+          'visibility': visibility,
+        }),
       ),
     );
 
-    return ApiHelper.decode(
-      response,
-    );
+    return ApiHelper.decode(response);
   }
 
   // =====================================================
   // TOGGLE
   // =====================================================
 
-  static Future<Map<String, dynamic>>
-      toggleActivity(
-    int activityId,
-  ) async {
-    final response =
-        await http.patch(
-      Uri.parse(
-        '$baseUrl/activities/'
-        '$activityId/toggle',
+  static Future<Map<String, dynamic>> toggleActivity(int activityId) async {
+    final headers = await _headers();
+
+    final response = await ApiHelper.request(
+      () => http.patch(
+        Uri.parse(
+          '$baseUrl/activities/'
+          '$activityId/toggle',
+        ),
+
+        headers: headers,
       ),
-
-      headers:
-          await _headers(),
     );
 
-    return ApiHelper.decode(
-      response,
-    );
+    return ApiHelper.decode(response);
   }
 
   // =====================================================
   // UPDATE VISIBILITY
   // =====================================================
 
-  static Future<Map<String, dynamic>>
-      updateVisibility({
+  static Future<Map<String, dynamic>> updateVisibility({
     required int activityId,
     required String visibility,
   }) async {
-    final response =
-        await http.patch(
-      Uri.parse(
-        '$baseUrl/activities/'
-        '$activityId/visibility',
-      ),
+    final headers = await _headers();
 
-      headers:
-          await _headers(),
+    final response = await ApiHelper.request(
+      () => http.patch(
+        Uri.parse(
+          '$baseUrl/activities/'
+          '$activityId/visibility',
+        ),
 
-      body: jsonEncode(
-        {
-          'visibility':
-              visibility,
-        },
+        headers: headers,
+
+        body: jsonEncode({'visibility': visibility}),
       ),
     );
 
-    return ApiHelper.decode(
-      response,
-    );
+    return ApiHelper.decode(response);
   }
 
   // =====================================================
   // DELETE
   // =====================================================
 
-  static Future<Map<String, dynamic>>
-      deleteActivity(
-    int activityId,
-  ) async {
-    final response =
-        await http.delete(
-      Uri.parse(
-        '$baseUrl/activities/'
-        '$activityId',
+  static Future<Map<String, dynamic>> deleteActivity(int activityId) async {
+    final headers = await _headers();
+
+    final response = await ApiHelper.request(
+      () => http.delete(
+        Uri.parse(
+          '$baseUrl/activities/'
+          '$activityId',
+        ),
+
+        headers: headers,
       ),
-
-      headers:
-          await _headers(),
     );
 
-    return ApiHelper.decode(
-      response,
-    );
+    return ApiHelper.decode(response);
   }
 }

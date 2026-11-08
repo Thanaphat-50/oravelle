@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../config/app_info.dart';
+import '../services/api_helper.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/orbit_background.dart';
@@ -65,7 +66,7 @@ class _RegisterPageState
 
     if (password.length < 8) {
       showMessage(
-        'Password ต้องมีอย่างน้อย 8 ตัวอักษร',
+        'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร',
       );
       return;
     }
@@ -73,7 +74,7 @@ class _RegisterPageState
     if (password !=
         confirmPassword) {
       showMessage(
-        'Password ไม่ตรงกัน',
+        'ยืนยันรหัสผ่านไม่ตรงกัน',
       );
       return;
     }
@@ -128,12 +129,11 @@ class _RegisterPageState
           ),
         );
       }
-    } catch (_) {
+    } catch (e) {
+      // เน็ตล่ม / หมดเวลารอ / เซิร์ฟเวอร์ผิดพลาด → ข้อความภาษาไทยจาก ApiHelper
       if (!mounted) return;
 
-      showMessage(
-        'ไม่สามารถเชื่อมต่อ Server ได้',
-      );
+      showMessage(ApiHelper.messageOf(e));
     } finally {
       if (mounted) {
         setState(() {
