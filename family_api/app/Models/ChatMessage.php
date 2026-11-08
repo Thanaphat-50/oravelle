@@ -11,6 +11,8 @@ class ChatMessage extends Model
     protected $fillable = [
         'conversation_id',
         'sender_id',
+        // รหัสจากแอป (กันส่งซ้ำ) — ไม่ซ้ำต่อ ห้อง + ผู้ส่ง
+        'client_id',
         'body',
         'image_path',
     ];

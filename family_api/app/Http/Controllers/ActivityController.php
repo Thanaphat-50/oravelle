@@ -28,7 +28,7 @@ class ActivityController extends Controller
 
         $query = Activity::query()
             ->with([
-                'user:id,name,email,profile_photo',
+                'user:id,name,profile_photo',
             ])
             ->where(function ($query) use (
                 $user,
@@ -265,7 +265,7 @@ class ActivityController extends Controller
         }
 
         $activity->load([
-            'user:id,name,email,profile_photo',
+            'user:id,name,profile_photo',
         ]);
 
         $activity->setAttribute(
@@ -300,6 +300,11 @@ class ActivityController extends Controller
         Activity $activity
     ) {
         $user = $request->user();
+
+        // กิจกรรมส่วนตัวของคนอื่น / กลุ่มอื่น → ตอบเหมือนไม่มี (ไม่บอกว่ามีอยู่)
+        if (!$this->canSee($activity, $user)) {
+            return $this->notFound();
+        }
 
         if ($activity->user_id !== $user->id) {
             return response()->json([
@@ -339,7 +344,7 @@ class ActivityController extends Controller
         ]);
 
         $activity->load([
-            'user:id,name,email,profile_photo',
+            'user:id,name,profile_photo',
         ]);
 
         $activity->setAttribute(
@@ -378,6 +383,11 @@ class ActivityController extends Controller
         $user = $request->user();
 
         // ต้องเป็นเจ้าของ
+        // กิจกรรมส่วนตัวของคนอื่น / กลุ่มอื่น → ตอบเหมือนไม่มี (ไม่บอกว่ามีอยู่)
+        if (!$this->canSee($activity, $user)) {
+            return $this->notFound();
+        }
+
         if ($activity->user_id !== $user->id) {
             return response()->json([
                 'status' => false,
@@ -411,7 +421,7 @@ class ActivityController extends Controller
             ]);
 
             $activity->load([
-                'user:id,name,email,profile_photo',
+                'user:id,name,profile_photo',
             ]);
 
             $activity->setAttribute(
@@ -515,7 +525,7 @@ class ActivityController extends Controller
         }
 
         $activity->load([
-            'user:id,name,email,profile_photo',
+            'user:id,name,profile_photo',
         ]);
 
         $activity->setAttribute(
@@ -548,6 +558,11 @@ class ActivityController extends Controller
         Activity $activity
     ) {
         $user = $request->user();
+
+        // กิจกรรมส่วนตัวของคนอื่น / กลุ่มอื่น → ตอบเหมือนไม่มี (ไม่บอกว่ามีอยู่)
+        if (!$this->canSee($activity, $user)) {
+            return $this->notFound();
+        }
 
         if ($activity->user_id !== $user->id) {
             return response()->json([
@@ -588,5 +603,30 @@ class ActivityController extends Controller
             'message' =>
                 'ลบกิจกรรมเรียบร้อยแล้ว',
         ]);
+    }
+
+    // =====================================================
+    // เห็นกิจกรรมนี้ได้ไหม: ของตัวเอง หรือแชร์ในกลุ่มที่เราอยู่
+    // =====================================================
+
+    private function canSee(Activity $activity, $user): bool
+    {
+        if ((int) $activity->user_id === (int) $user->id) {
+            return true;
+        }
+
+        return $activity->visibility === 'family'
+            && $activity->family_id !== null
+            && FamilyMember::where('user_id', $user->id)
+                ->where('family_id', $activity->family_id)
+                ->exists();
+    }
+
+    private function notFound()
+    {
+        return response()->json([
+            'status' => false,
+            'message' => 'ไม่พบกิจกรรมนี้',
+        ], 404);
     }
 }

@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\UserBlock;
 use App\Services\PushNotifications;
 use App\Support\MediaStorage;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -241,6 +242,7 @@ class ChatController extends Controller
     // =====================================================
     // POST /api/chats/{conversation}/messages
     // body (ข้อความ) และ/หรือ image (รูป 1 รูป แบบ multipart)
+    // client_id (รหัสที่แอปสร้าง): ส่งซ้ำด้วยรหัสเดิม → ได้ข้อความเดิม (200) ไม่สร้างซ้ำ/ไม่แจ้งเตือนซ้ำ
     // =====================================================
 
     public function send(Request $request, Conversation $conversation)
@@ -254,6 +256,7 @@ class ChatController extends Controller
         $data = $request->validate([
             'body' => 'required_without:image|nullable|string|max:2000',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:' . self::MAX_IMAGE_KB,
+            'client_id' => 'nullable|string|max:64',
         ], [
             'body.required_without' => 'กรุณาพิมพ์ข้อความหรือแนบรูป',
             'image.image' => 'รองรับเฉพาะรูป JPG, PNG หรือ WEBP',
@@ -269,6 +272,13 @@ class ChatController extends Controller
 
         $body = isset($data['body']) ? trim($data['body']) : null;
 
+        $clientId = filled($data['client_id'] ?? null) ? $data['client_id'] : null;
+
+        // ส่งซ้ำ (หมดเวลารอแต่เซิร์ฟเวอร์บันทึกแล้ว / กดส่งใหม่) → ข้อความเดิม
+        if ($sent = $this->sentBefore($conversation, $me, $clientId)) {
+            return $this->sentResponse($sent, $me, 200);
+        }
+
         if (($body === null || $body === '') && !$request->hasFile('image')) {
             return response()->json([
                 'status' => false,
@@ -281,10 +291,11 @@ class ChatController extends Controller
             : null;
 
         try {
-            $message = DB::transaction(function () use ($conversation, $me, $body, $imagePath) {
+            $message = DB::transaction(function () use ($conversation, $me, $body, $imagePath, $clientId) {
                 $message = ChatMessage::create([
                     'conversation_id' => $conversation->id,
                     'sender_id' => $me->id,
+                    'client_id' => $clientId,
                     'body' => $body === '' ? null : $body,
                     'image_path' => $imagePath,
                 ]);
@@ -297,6 +308,17 @@ class ChatController extends Controller
 
                 return $message;
             });
+        } catch (UniqueConstraintViolationException $e) {
+            // ส่งซ้ำเข้ามาพร้อมกัน: อีกคำขอบันทึกไปก่อน → ใช้ข้อความนั้น
+            MediaStorage::delete([$imagePath]);
+
+            $sent = $this->sentBefore($conversation, $me, $clientId);
+
+            if (!$sent) {
+                throw $e;
+            }
+
+            return $this->sentResponse($sent, $me, 200);
         } catch (Throwable $e) {
             MediaStorage::delete([$imagePath]);
 
@@ -305,10 +327,23 @@ class ChatController extends Controller
 
         $this->notifyRecipient($me, $otherId, $conversation, $message);
 
+        return $this->sentResponse($message, $me, 201);
+    }
+
+    private function sentBefore(Conversation $conversation, User $me, ?string $clientId): ?ChatMessage
+    {
+        return $clientId === null ? null : ChatMessage::where('conversation_id', $conversation->id)
+            ->where('sender_id', $me->id)
+            ->where('client_id', $clientId)
+            ->first();
+    }
+
+    private function sentResponse(ChatMessage $message, User $me, int $status)
+    {
         return response()->json([
             'status' => true,
             'message' => $this->messagePayload($message, $me),
-        ], 201);
+        ], $status);
     }
 
     // =====================================================
@@ -522,6 +557,8 @@ class ChatController extends Controller
             'id' => $message->id,
             'sender_id' => $message->sender_id,
             'is_mine' => (int) $message->sender_id === (int) $me->id,
+            // รหัสจากแอปของผู้ส่ง (จับคู่ข้อความที่กำลังส่งกับข้อความจากเซิร์ฟเวอร์) — ส่งให้ผู้ส่งเท่านั้น
+            'client_id' => (int) $message->sender_id === (int) $me->id ? $message->client_id : null,
             'body' => $message->body,
             'image_url' => $message->image_url,
             'created_at' => $message->created_at?->toIso8601String(),

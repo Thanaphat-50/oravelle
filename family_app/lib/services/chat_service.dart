@@ -133,10 +133,12 @@ class ChatService {
     return ApiHelper.decode(response);
   }
 
+  // clientId: รหัสที่แอปสร้างก่อนส่ง → ส่งใหม่ด้วยรหัสเดิมได้ข้อความเดิม (ไม่ซ้ำ)
   static Future<Map<String, dynamic>> sendMessage(
     int conversationId, {
     String? body,
     String? imagePath,
+    String? clientId,
   }) async {
     final Uri uri = Uri.parse('$baseUrl/chats/$conversationId/messages');
 
@@ -145,8 +147,11 @@ class ChatService {
       final headers = await _headers();
 
       final response = await ApiHelper.request(
-        () =>
-            http.post(uri, headers: headers, body: jsonEncode({'body': body})),
+        () => http.post(
+          uri,
+          headers: headers,
+          body: jsonEncode({'body': body, 'client_id': ?clientId}),
+        ),
       );
 
       return ApiHelper.decode(response);
@@ -158,6 +163,10 @@ class ChatService {
 
     if (body != null && body.trim().isNotEmpty) {
       request.fields['body'] = body;
+    }
+
+    if (clientId != null) {
+      request.fields['client_id'] = clientId;
     }
 
     request.files.add(await http.MultipartFile.fromPath('image', imagePath));

@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../services/api_helper.dart';
 import '../services/chat_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/photo_viewer.dart';
@@ -16,6 +18,10 @@ import 'user_profile_page.dart';
 // - ข้อความเรา (ขวา) / ของอีกฝ่าย (ซ้าย) ส่งข้อความหรือรูปได้
 // - ดึงข้อความใหม่ทุก 4 วินาทีขณะเปิดห้อง (หยุดเมื่อแอปอยู่เบื้องหลัง)
 // - กดค้าง: คัดลอก / ยกเลิกการส่ง (ข้อความของเรา)
+// - กดส่ง: ข้อความย้ายไปคิวส่ง (outbox) ทันที ช่องพิมพ์ว่าง พิมพ์ข้อความถัดไปได้เลย
+//   ส่งทีละข้อความตามลำดับ แสดง "กำลังส่ง…" / "ส่งไม่สำเร็จ" (แตะเพื่อส่งอีกครั้ง/แก้ไข/ลบ)
+//   แต่ละข้อความมี client_id: ส่งใหม่ด้วยรหัสเดิม เซิร์ฟเวอร์ไม่สร้างซ้ำ
+//   ข้อความที่ดึงมาใหม่ (polling) ที่มี client_id ตรงกัน → นับว่าส่งแล้ว ไม่แสดงซ้ำ
 // =======================================================
 
 class ChatRoomPage extends StatefulWidget {
@@ -63,7 +69,14 @@ class _ChatRoomPageState extends State<ChatRoomPage>
 
   bool isLoadingOlder = false;
 
-  bool isSending = false;
+  // ข้อความที่กดส่งแล้วแต่ยังไม่ได้รับจากเซิร์ฟเวอร์ (เรียงตามที่กดส่ง)
+  // {client_id, body, image (XFile?), state: sending | failed, error, created_at}
+  final List<Map<String, dynamic>> outbox = [];
+
+  // กำลังส่งคิว (ส่งทีละข้อความ ลำดับไม่สลับ)
+  bool isFlushing = false;
+
+  final Random random = Random();
 
   bool isPolling = false;
 
@@ -215,6 +228,7 @@ class _ChatRoomPageState extends State<ChatRoomPage>
 
       setState(() {
         messages.addAll(incoming.where((m) => !known.contains(idOf(m))));
+        removeDelivered(incoming);
         applyConversation(result['conversation']);
       });
 
@@ -283,46 +297,233 @@ class _ChatRoomPageState extends State<ChatRoomPage>
   bool get hasDraft =>
       inputController.text.trim().isNotEmpty || pickedImage != null;
 
-  Future<void> send() async {
-    if (isSending || !hasDraft || !canSend) return;
+  // กดส่ง: ย้ายข้อความ/รูปเข้าคิว แล้วล้างช่องพิมพ์ทันที
+  // (ข้อความที่พิมพ์ต่อระหว่างรอส่ง ไม่ถูกล้างตอนข้อความก่อนหน้าส่งเสร็จ)
+  void send() {
+    if (!hasDraft || !canSend) return;
 
     final String text = inputController.text.trim();
 
-    final XFile? image = pickedImage;
+    setState(() {
+      outbox.add({
+        'client_id': newClientId(),
+        'body': text,
+        'image': pickedImage,
+        'state': 'sending',
+        'error': null,
+        'created_at': DateTime.now().toIso8601String(),
+        'is_mine': true,
+      });
 
-    setState(() => isSending = true);
+      inputController.clear();
+      pickedImage = null;
+    });
+
+    scrollToNewest();
+
+    flushOutbox();
+  }
+
+  String newClientId() {
+    return '${DateTime.now().microsecondsSinceEpoch}-${random.nextInt(1 << 30)}';
+  }
+
+  // ส่งข้อความในคิวทีละข้อความตามลำดับ
+  Future<void> flushOutbox() async {
+    if (isFlushing) return;
+
+    isFlushing = true;
+
+    try {
+      while (mounted) {
+        final int index = outbox.indexWhere((m) => m['state'] == 'sending');
+
+        if (index < 0) break;
+
+        await deliver(outbox[index]);
+      }
+    } finally {
+      isFlushing = false;
+    }
+  }
+
+  Future<void> deliver(Map<String, dynamic> entry) async {
+    final String body = entry['body']?.toString() ?? '';
+
+    final XFile? image = entry['image'] as XFile?;
+
+    String? error;
 
     try {
       final result = await ChatService.sendMessage(
         widget.conversationId,
-        body: text.isEmpty ? null : text,
+        body: body.isEmpty ? null : body,
         imagePath: image?.path,
+        clientId: entry['client_id'] as String,
       );
-
-      if (!mounted) return;
 
       final dynamic sent = result['message'];
 
       if (result['status'] == true && sent is Map) {
+        if (!mounted) return;
+
         final Map<String, dynamic> message = Map<String, dynamic>.from(sent);
 
         setState(() {
+          outbox.remove(entry);
+
           if (!messages.map(idOf).contains(idOf(message))) {
             messages.add(message);
           }
-
-          inputController.clear();
-          pickedImage = null;
         });
 
-        scrollToNewest();
-      } else {
-        showMessage(result['message']?.toString() ?? 'ส่งข้อความไม่สำเร็จ');
+        return;
       }
+
+      error = result['message']?.toString() ?? 'ส่งข้อความไม่สำเร็จ';
     } catch (e) {
-      if (mounted) showMessage(e.toString());
-    } finally {
-      if (mounted) setState(() => isSending = false);
+      error = ApiHelper.messageOf(e);
+    }
+
+    if (!mounted || !outbox.contains(entry)) return;
+
+    setState(() {
+      entry['state'] = 'failed';
+      entry['error'] = error;
+    });
+  }
+
+  // ข้อความจากเซิร์ฟเวอร์ที่ client_id ตรงกับคิว → ส่งถึงแล้ว เอาออกจากคิว
+  void removeDelivered(List<Map<String, dynamic>> incoming) {
+    final Set<String> delivered = incoming
+        .map((m) => m['client_id']?.toString())
+        .whereType<String>()
+        .toSet();
+
+    if (delivered.isNotEmpty) {
+      outbox.removeWhere((m) => delivered.contains(m['client_id']));
+    }
+  }
+
+  // ข้อความที่ส่งไม่สำเร็จ: ส่งอีกครั้ง / แก้ไข (กลับไปที่ช่องพิมพ์) / คัดลอก / ลบ
+  Future<void> openFailedActions(Map<String, dynamic> entry) async {
+    final String body = entry['body']?.toString() ?? '';
+
+    // แก้ไขได้เมื่อช่องพิมพ์ว่าง (ไม่ทับข้อความที่กำลังพิมพ์อยู่)
+    final bool canEdit = !hasDraft;
+
+    final String? action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (entry['error'] != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Text(
+                  entry['error'].toString(),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.muted, fontSize: 13),
+                ),
+              ),
+            ListTile(
+              leading: Icon(Icons.refresh_rounded, color: AppColors.primary),
+              title: const Text('ส่งอีกครั้ง'),
+              onTap: () => Navigator.of(sheetContext).pop('retry'),
+            ),
+            ListTile(
+              enabled: canEdit,
+              leading: Icon(Icons.edit_outlined, color: AppColors.navy),
+              title: const Text('แก้ไขข้อความ'),
+              subtitle: canEdit
+                  ? null
+                  : const Text('ส่งหรือลบข้อความในช่องพิมพ์ก่อน'),
+              onTap: () => Navigator.of(sheetContext).pop('edit'),
+            ),
+            if (body.isNotEmpty)
+              ListTile(
+                leading: Icon(Icons.copy_rounded, color: AppColors.navy),
+                title: const Text('คัดลอกข้อความ'),
+                onTap: () => Navigator.of(sheetContext).pop('copy'),
+              ),
+            ListTile(
+              leading: Icon(
+                Icons.delete_outline_rounded,
+                color: AppColors.danger,
+              ),
+              title: Text(
+                'ลบข้อความนี้',
+                style: TextStyle(color: AppColors.danger),
+              ),
+              onTap: () => Navigator.of(sheetContext).pop('discard'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+
+    if (!mounted || action == null || !outbox.contains(entry)) return;
+
+    switch (action) {
+      case 'retry':
+        setState(() {
+          entry['state'] = 'sending';
+          entry['error'] = null;
+        });
+
+        flushOutbox();
+      case 'edit':
+        if (hasDraft) return;
+
+        setState(() {
+          outbox.remove(entry);
+          inputController.text = body;
+          pickedImage = entry['image'] as XFile?;
+        });
+      case 'copy':
+        await Clipboard.setData(ClipboardData(text: body));
+
+        showMessage('คัดลอกแล้ว');
+      case 'discard':
+        setState(() => outbox.remove(entry));
+    }
+  }
+
+  // ออกจากห้องตอนยังมีข้อความค้าง → ถามก่อน (คิวไม่ได้บันทึกไว้)
+  Future<void> confirmLeave() async {
+    final bool sending = outbox.any((m) => m['state'] == 'sending');
+
+    final bool? leave = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          sending ? 'ยังส่งข้อความไม่เสร็จ' : 'มีข้อความที่ส่งไม่สำเร็จ',
+        ),
+        content: Text(
+          sending
+              ? 'ถ้าออกตอนนี้ ข้อความที่ยังไม่ได้ส่งอาจหายไป'
+              : 'ถ้าออกตอนนี้ ข้อความที่ส่งไม่สำเร็จจะหายไป',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('ออก'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('อยู่ต่อ'),
+          ),
+        ],
+      ),
+    );
+
+    if (leave == true && mounted) {
+      setState(() => outbox.clear());
+
+      Navigator.of(context).pop();
     }
   }
 
@@ -504,6 +705,11 @@ class _ChatRoomPageState extends State<ChatRoomPage>
 
     final String? imageUrl = message['image_url']?.toString();
 
+    // ข้อความในคิว (ยังไม่ถึงเซิร์ฟเวอร์): รูปจากเครื่อง + สถานะ
+    final String? state = message['state']?.toString();
+    final bool failed = state == 'failed';
+    final XFile? localImage = message['image'] as XFile?;
+
     final DateTime? time = timeOf(message);
 
     final Color textColor = mine ? Colors.white : AppColors.navy;
@@ -535,62 +741,117 @@ class _ChatRoomPageState extends State<ChatRoomPage>
           maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
         child: GestureDetector(
-          onLongPress: () => openMessageActions(message),
-          child: Column(
-            crossAxisAlignment: mine
-                ? CrossAxisAlignment.end
-                : CrossAxisAlignment.start,
-            children: [
-              if (imageUrl != null && imageUrl.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: GestureDetector(
-                    onTap: () => showPhotoViewer(context, urls: [imageUrl]),
+          onTap: failed ? () => openFailedActions(message) : null,
+          onLongPress: state == null
+              ? () => openMessageActions(message)
+              : failed
+              ? () => openFailedActions(message)
+              : null,
+          child: Opacity(
+            opacity: state == null ? 1 : 0.72,
+            child: Column(
+              crossAxisAlignment: mine
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
+              children: [
+                if (localImage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(20),
-                      child: Image.network(
-                        imageUrl,
+                      child: Image.file(
+                        File(localImage.path),
                         width: 230,
                         height: 250,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          width: 220,
-                          height: 120,
-                          color: AppColors.fill,
-                          alignment: Alignment.center,
-                          child: Icon(
-                            Icons.broken_image_outlined,
-                            color: AppColors.muted,
-                          ),
+                      ),
+                    ),
+                  ),
+                if (imageUrl != null && imageUrl.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: GestureDetector(
+                      onTap: () => showPhotoViewer(context, urls: [imageUrl]),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Image.network(
+                          imageUrl,
+                          width: 230,
+                          height: 250,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              Container(
+                                width: 220,
+                                height: 120,
+                                color: AppColors.fill,
+                                alignment: Alignment.center,
+                                child: Icon(
+                                  Icons.broken_image_outlined,
+                                  color: AppColors.muted,
+                                ),
+                              ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              if (body.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.fromLTRB(15, 10, 15, 11),
-                  decoration: bubbleDecoration,
-                  child: Text(
-                    body,
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 15,
-                      height: 1.4,
+                if (body.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(15, 10, 15, 11),
+                    decoration: bubbleDecoration,
+                    child: Text(
+                      body,
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 15,
+                        height: 1.4,
+                      ),
                     ),
                   ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 3, 4, 0),
+                  child: state == null
+                      ? Text(
+                          [
+                            if (time != null) formatTime(time),
+                            if (showRead) 'อ่านแล้ว',
+                          ].join(' · '),
+                          style: TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 11,
+                          ),
+                        )
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              failed
+                                  ? Icons.error_outline_rounded
+                                  : Icons.schedule_rounded,
+                              size: 13,
+                              color: failed
+                                  ? AppColors.danger
+                                  : AppColors.muted,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              failed
+                                  ? 'ส่งไม่สำเร็จ · แตะเพื่อส่งอีกครั้ง'
+                                  : 'กำลังส่ง…',
+                              style: TextStyle(
+                                color: failed
+                                    ? AppColors.danger
+                                    : AppColors.muted,
+                                fontSize: 11.5,
+                                fontWeight: failed
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
                 ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(4, 3, 4, 0),
-                child: Text(
-                  [
-                    if (time != null) formatTime(time),
-                    if (showRead) 'อ่านแล้ว',
-                  ].join(' · '),
-                  style: TextStyle(color: AppColors.muted, fontSize: 11),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -614,7 +875,8 @@ class _ChatRoomPageState extends State<ChatRoomPage>
 
     DateTime? previous;
 
-    for (final message in messages) {
+    // ข้อความจากเซิร์ฟเวอร์ แล้วต่อด้วยข้อความในคิว (ล่างสุด)
+    for (final message in [...messages, ...outbox]) {
       final DateTime? time = timeOf(message);
 
       if (time != null && !sameDay(previous, time)) {
@@ -694,7 +956,7 @@ class _ChatRoomPageState extends State<ChatRoomPage>
       );
     }
 
-    if (messages.isEmpty) return buildEmpty();
+    if (messages.isEmpty && outbox.isEmpty) return buildEmpty();
 
     return ListView(
       controller: scrollController,
@@ -775,9 +1037,7 @@ class _ChatRoomPageState extends State<ChatRoomPage>
                           shape: const CircleBorder(),
                           child: InkWell(
                             customBorder: const CircleBorder(),
-                            onTap: isSending
-                                ? null
-                                : () => setState(() => pickedImage = null),
+                            onTap: () => setState(() => pickedImage = null),
                             child: const Padding(
                               padding: EdgeInsets.all(4),
                               child: Icon(
@@ -797,7 +1057,7 @@ class _ChatRoomPageState extends State<ChatRoomPage>
                 children: [
                   IconButton(
                     tooltip: 'ส่งรูป',
-                    onPressed: isSending ? null : pickImage,
+                    onPressed: pickImage,
                     icon: Icon(Icons.photo_outlined, color: AppColors.primary),
                   ),
                   Expanded(
@@ -839,7 +1099,7 @@ class _ChatRoomPageState extends State<ChatRoomPage>
                       duration: const Duration(milliseconds: 180),
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: hasDraft && !isSending
+                        gradient: hasDraft
                             ? LinearGradient(
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
@@ -849,30 +1109,22 @@ class _ChatRoomPageState extends State<ChatRoomPage>
                                 ],
                               )
                             : null,
-                        color: hasDraft && !isSending ? null : AppColors.border,
+                        color: hasDraft ? null : AppColors.border,
                       ),
                       child: Material(
                         color: Colors.transparent,
                         shape: const CircleBorder(),
                         child: InkWell(
                           customBorder: const CircleBorder(),
-                          onTap: hasDraft && !isSending ? send : null,
-                          child: SizedBox(
+                          onTap: hasDraft ? send : null,
+                          child: const SizedBox(
                             width: 44,
                             height: 44,
-                            child: isSending
-                                ? const Padding(
-                                    padding: EdgeInsets.all(12),
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Icon(
-                                    Icons.send_rounded,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
+                            child: Icon(
+                              Icons.send_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
                           ),
                         ),
                       ),
@@ -889,54 +1141,60 @@ class _ChatRoomPageState extends State<ChatRoomPage>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 0,
-        title: InkWell(
-          onTap: openProfile,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-            child: Row(
-              children: [
-                UserAvatar(user: otherAvatar, radius: 19),
-                const SizedBox(width: 10),
-                Flexible(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        otherName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: AppColors.navy,
-                          fontSize: 16.5,
-                          fontWeight: FontWeight.w800,
+    return PopScope(
+      canPop: outbox.isEmpty,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) confirmLeave();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          titleSpacing: 0,
+          title: InkWell(
+            onTap: openProfile,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+              child: Row(
+                children: [
+                  UserAvatar(user: otherAvatar, radius: 19),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          otherName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.navy,
+                            fontSize: 16.5,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                      ),
-                      Text(
-                        roomSubtitle,
-                        style: TextStyle(
-                          color: AppColors.muted,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w500,
+                        Text(
+                          roomSubtitle,
+                          style: TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
-      ),
-      body: Column(
-        children: [
-          Expanded(child: buildList()),
-          buildInputBar(),
-        ],
+        body: Column(
+          children: [
+            Expanded(child: buildList()),
+            buildInputBar(),
+          ],
+        ),
       ),
     );
   }

@@ -47,6 +47,17 @@ class Activity extends Model
     // Helpers
     // =====================================================
 
+    // ส่งให้แอป: ผู้สร้างมีแค่ id ชื่อ และรูป
+    // (สมาชิกในกลุ่มเห็นกิจกรรมที่แชร์ ไม่ต้องเห็นอีเมลหรือข้อมูลบัญชีของผู้สร้าง)
+    public function toArray()
+    {
+        if ($this->relationLoaded('user') && $this->user) {
+            $this->user->setVisible(['id', 'name', 'profile_image_url', 'profile_photo_url']);
+        }
+
+        return parent::toArray();
+    }
+
     public function isPrivate(): bool
     {
         return $this->visibility === 'private';
