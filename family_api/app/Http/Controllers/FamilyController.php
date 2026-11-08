@@ -8,6 +8,7 @@ use App\Models\Family;
 use App\Models\FamilyInvitation;
 use App\Models\FamilyMember;
 use App\Models\Post;
+use App\Models\User;
 use App\Models\UserLocation;
 use App\Support\MediaStorage;
 use Illuminate\Http\Request;
@@ -16,6 +17,9 @@ use Illuminate\Support\Str;
 
 class FamilyController extends Controller
 {
+    // ข้อมูลสมาชิกที่คนในกลุ่มเห็นกันได้
+    private const MEMBER_FIELDS = ['id', 'name', 'profile_image_url', 'profile_photo_url'];
+
     // =====================================================
     // สร้างครอบครัว
     // =====================================================
@@ -234,12 +238,17 @@ class FamilyController extends Controller
 
         $family =
             Family::with([
-                'owner:id,name,email,profile_photo',
+                'owner:id,name,profile_photo',
 
-                'members:id,name,email,profile_photo',
+                'members:id,name,profile_photo',
             ])->find(
                 $membership->family_id
             );
+
+        // สมาชิกเห็นกันแค่ id ชื่อ รูป (และบทบาทใน pivot) — ไม่ส่งอีเมลของคนอื่น
+        // อีเมลของตัวเองดูได้ที่ /api/profile
+        $family?->owner?->setVisible(self::MEMBER_FIELDS);
+        $family?->members->each(fn (User $member) => $member->setVisible([...self::MEMBER_FIELDS, 'pivot']));
 
         if (!$family) {
             return response()->json([

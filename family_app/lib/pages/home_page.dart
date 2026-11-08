@@ -3076,8 +3076,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
             final String memberName = member['name']?.toString() ?? 'สมาชิก';
 
-            final String email = member['email']?.toString() ?? '';
-
             // กดการ์ด → หน้าโปรไฟล์ของสมาชิก
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
@@ -3160,8 +3158,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
                         const SizedBox(height: 3),
 
+                        // ไม่แสดงอีเมลของสมาชิก (เซิร์ฟเวอร์ไม่ส่งมาแล้ว)
                         Text(
-                          email,
+                          'แตะเพื่อดูโปรไฟล์',
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: AppColors.muted,

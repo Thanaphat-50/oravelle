@@ -133,9 +133,13 @@ class LocationController extends Controller
             $memberIds->diff($pausedIds)
         )
             ->with([
-                'user:id,name,email,profile_photo'
+                'user:id,name,profile_photo'
             ])
             ->get()
+            // ไม่ส่งอีเมลของสมาชิกไปกับตำแหน่ง (แผนที่ใช้แค่ชื่อและรูป)
+            ->each(fn (UserLocation $location) => $location->user?->setVisible([
+                'id', 'name', 'profile_image_url', 'profile_photo_url',
+            ]))
             // is_me → แอปรู้ว่าจุดไหนคือเรา (ไม่ต้องคิดระยะทาง/นำทางไปหาตัวเอง)
             ->each(fn (UserLocation $location) => $location->setAttribute(
                 'is_me',
