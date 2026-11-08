@@ -17,10 +17,12 @@ Schedule::command('sanctum:prune-expired --hours=24')->daily();
 Schedule::command('model:prune', ['--model' => [AppNotification::class]])->daily();
 
 // คำสั่งซื้อเลยเวลาชำระ → ยกเลิก + คืนสต็อก / ส่งแล้วครบกำหนด → ยืนยันรับสินค้า (App\Console\Commands\ExpireOrders)
-// ทุกนาที: รอบก่อนยังไม่เสร็จ → ข้ามรอบนี้ (withoutOverlapping) และรันเครื่องเดียว (onOneServer)
+// ทุกชั่วโมง (ไม่ใช่ทุกนาที): Laravel Cloud เปิด Scale to zero ไว้ ถ้ารันถี่ Scheduler จะปลุกแอปจนไม่ได้หลับ
+// เวลาชำระมี 24 ชั่วโมง → คืนสต็อกช้าไปไม่เกิน 1 ชั่วโมง และหน้าคำสั่งซื้อยังยกเลิกให้ทันทีตอนมีคนเปิดดู
+// รอบก่อนยังไม่เสร็จ → ข้ามรอบนี้ (withoutOverlapping) และรันเครื่องเดียว (onOneServer)
 // ใช้ lock จาก Cache (CACHE_STORE=database) ถึงรันซ้อนก็ไม่ยกเลิกซ้ำ เพราะล็อกแถวคำสั่งซื้ออีกชั้น
-// ต้องเปิด Scheduler บน Laravel Cloud ถึงจะทำงาน (ยังไม่เปิด → หน้าคำสั่งซื้อยังตรวจให้ตอนเปิดดู)
+// ต้องเปิด Scheduler บน Laravel Cloud ถึงจะทำงาน
 Schedule::command('orders:expire')
-    ->everyMinute()
+    ->hourly()
     ->withoutOverlapping(10)
     ->onOneServer();

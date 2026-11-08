@@ -237,7 +237,7 @@ class OrderStateRaceTest extends TestCase
             ->first(fn ($event) => str_contains((string) $event->command, 'orders:expire'));
 
         $this->assertNotNull($event);
-        $this->assertSame('* * * * *', $event->expression);
+        $this->assertSame('0 * * * *', $event->expression);
         $this->assertTrue($event->withoutOverlapping);
         $this->assertTrue($event->onOneServer);
     }

@@ -6,7 +6,7 @@ use App\Models\Order;
 use Illuminate\Console\Command;
 
 // =======================================================
-// คำสั่งซื้อที่ครบกำหนดเวลา (Scheduler รันทุกนาที ดู routes/console.php)
+// คำสั่งซื้อที่ครบกำหนดเวลา (Scheduler รันทุกชั่วโมง ดู routes/console.php)
 // - เลยเวลาชำระ (awaiting_payment) → ยกเลิก + คืนสต็อก + แจ้งผู้ซื้อและร้าน
 // - ส่งแล้วครบกำหนด (shipped) → ระบบยืนยันรับสินค้าให้
 //
