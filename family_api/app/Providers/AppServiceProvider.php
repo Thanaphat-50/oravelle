@@ -56,6 +56,25 @@ class AppServiceProvider extends ServiceProvider
         // - IP เดียวกัน 20 ครั้ง/ชั่วโมง (กันไล่ขอรหัสหลายบัญชี)
         // =====================================================
 
+        // =====================================================
+        // Rate Limit: ศูนย์ช่วยเหลือ (ต่อผู้ใช้)
+        // - สร้างคำร้อง 10 เรื่อง/ชั่วโมง
+        // - ส่งข้อความเพิ่ม 10 ครั้ง/นาที และ 60 ครั้ง/ชั่วโมง
+        // =====================================================
+
+        RateLimiter::for('support-ticket', fn (Request $request) => Limit::perHour(10)
+            ->by('support-ticket:' . ($request->user()?->id ?? $request->ip()))
+            ->response($this->tooManyAttempts(...)));
+
+        RateLimiter::for('support-message', fn (Request $request) => [
+            Limit::perMinute(10)
+                ->by('support-message-min:' . ($request->user()?->id ?? $request->ip()))
+                ->response($this->tooManyAttempts(...)),
+            Limit::perHour(60)
+                ->by('support-message-hour:' . ($request->user()?->id ?? $request->ip()))
+                ->response($this->tooManyAttempts(...)),
+        ]);
+
         RateLimiter::for('password-reset', function (Request $request) {
             $email = Str::lower(trim((string) $request->input('email')));
 

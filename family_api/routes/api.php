@@ -30,6 +30,7 @@ use App\Http\Controllers\SocialAuthController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\SupportTicketController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -794,4 +795,29 @@ Route::middleware('auth:sanctum')->group(function () {
         'updateVisibility'
     ]);
 
+
+    // =====================================================
+    // ศูนย์ช่วยเหลือ (SupportTicketController) — ทีมงานตอบใน /admin
+    // =====================================================
+
+    Route::get('/support/tickets', [SupportTicketController::class, 'index']);
+
+    // ประกาศก่อน {ticket}
+    Route::get('/support/tickets/open', [SupportTicketController::class, 'openForOrder']);
+
+    Route::post('/support/tickets', [SupportTicketController::class, 'store'])
+        ->middleware('throttle:support-ticket');
+
+    Route::get('/support/tickets/{ticket}', [SupportTicketController::class, 'show'])
+        ->whereNumber('ticket');
+
+    Route::post('/support/tickets/{ticket}/messages', [SupportTicketController::class, 'storeMessage'])
+        ->whereNumber('ticket')
+        ->middleware('throttle:support-message');
 });
+
+// รูปแนบในคำร้อง: ลิงก์ชั่วคราวที่ลงลายเซ็น (สร้างให้เฉพาะเจ้าของคำร้องและทีมงาน)
+Route::get('/support/files/{attachment}', [SupportTicketController::class, 'file'])
+    ->middleware('signed')
+    ->whereNumber('attachment')
+    ->name('support.file');

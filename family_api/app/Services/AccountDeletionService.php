@@ -13,6 +13,8 @@ use App\Models\PostImage;
 use App\Models\PostVideo;
 use App\Models\Shop;
 use App\Models\User;
+use App\Models\SupportAttachment;
+use App\Models\SupportTicket;
 use App\Support\MediaStorage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -105,6 +107,12 @@ class AccountDeletionService
         // รูปในห้องแชทของผู้ใช้ (ห้องถูกลบตาม cascade)
         $chatMediaPaths = Conversation::mediaPathsOf($user->id);
 
+        // รูปแนบในคำร้องศูนย์ช่วยเหลือของผู้ใช้ (คำร้อง/ข้อความ/บันทึกภายในถูกลบตาม cascade)
+        $supportPaths = SupportAttachment::whereIn(
+            'ticket_id',
+            SupportTicket::where('user_id', $user->id)->select('id')
+        )->pluck('path')->all();
+
         DB::transaction(function () use ($user) {
             // Owner คนเดียวของครอบครัว → ลบครอบครัวด้วย
             Family::where('owner_id', $user->id)->delete();
@@ -123,6 +131,9 @@ class AccountDeletionService
             ...$shopMediaPaths,
             ...$chatMediaPaths,
         ]);
+
+        // ไฟล์แนบคำร้องอยู่ใน disk ส่วนตัวของศูนย์ช่วยเหลือ
+        SupportAttachment::deleteFiles($supportPaths);
 
         // ลบรูปโปรไฟล์หลังลบข้อมูลสำเร็จแล้ว
         if ($photoPath) {

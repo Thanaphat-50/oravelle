@@ -6,6 +6,7 @@ use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Exceptions\PostTooLargeException;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
+use Illuminate\Routing\Exceptions\InvalidSignatureException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -48,6 +49,11 @@ class ApiErrors
                 ['retry_after' => $seconds],
                 $e->getHeaders()
             );
+        }
+
+        // ลิงก์ชั่วคราว (เช่น รูปแนบในคำร้อง) หมดอายุ / ถูกแก้
+        if ($e instanceof InvalidSignatureException) {
+            return self::json(403, 'ลิงก์หมดอายุ กรุณาเปิดหน้านั้นใหม่อีกครั้ง');
         }
 
         if ($e instanceof PostTooLargeException) {
