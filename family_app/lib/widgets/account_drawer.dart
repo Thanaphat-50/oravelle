@@ -22,6 +22,7 @@ enum AccountMenuItem {
   addresses,
   shop,
   settings,
+  help,
   logout,
 }
 
@@ -364,6 +365,13 @@ class _AccountDrawerState extends State<AccountDrawer> {
                       title: 'ตั้งค่า',
                       subtitle: 'แจ้งเตือน ตำแหน่ง ความเป็นส่วนตัว บัญชี',
                       color: AppColors.subtle,
+                    ),
+                    buildItem(
+                      item: AccountMenuItem.help,
+                      icon: Icons.support_agent_rounded,
+                      title: 'ช่วยเหลือและแจ้งปัญหา',
+                      subtitle: 'ส่งเรื่องให้ทีมงานและติดตามคำตอบ',
+                      color: AppColors.sky,
                     ),
                     buildItem(
                       item: AccountMenuItem.logout,

@@ -12,6 +12,8 @@ import '../widgets/photo_viewer.dart';
 import '../widgets/promptpay_qr.dart';
 import '../widgets/shop_trust_widgets.dart' show StarRow, showStarReviewSheet;
 import 'chat_room_page.dart';
+import 'support_ticket_form_page.dart';
+import 'support_ticket_page.dart';
 import 'market_shop_page.dart';
 
 // =======================================================
@@ -99,6 +101,34 @@ class _OrderPageState extends State<OrderPage> {
       if (mounted) showMessage(e.toString());
     } finally {
       if (mounted) setState(() => isWorking = false);
+    }
+  }
+
+  // ศูนย์ช่วยเหลือ: แนบเลขคำสั่งซื้อให้อัตโนมัติ (เซิร์ฟเวอร์ตรวจว่าเป็นผู้ซื้อ/ร้านของคำสั่งซื้อนี้)
+  Future<void> reportProblem({
+    required String category,
+    String? subject,
+  }) async {
+    final Map<String, dynamic>? data = order;
+
+    if (data == null) return;
+
+    final int? ticketId = await Navigator.of(context).push<int>(
+      MaterialPageRoute(
+        builder: (_) => SupportTicketFormPage(
+          category: category,
+          subject: subject,
+          order: {'id': data['id'], 'code': data['code']},
+        ),
+      ),
+    );
+
+    if (ticketId != null && mounted) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => SupportTicketPage(ticketId: ticketId),
+        ),
+      );
     }
   }
 
@@ -1313,6 +1343,13 @@ class _OrderPageState extends State<OrderPage> {
           Icons.currency_exchange_rounded,
           refundOrder,
         ),
+      // ร้านแจ้งว่าคืนเงินแล้วแต่ยังไม่ได้รับ → ส่งเรื่องให้ทีมงาน (ไม่เปลี่ยนสถานะคืนเงิน)
+      if (can.contains('confirm_refund'))
+        secondary(
+          'ยังไม่ได้รับเงินคืน',
+          () =>
+              reportProblem(category: 'refund', subject: 'ยังไม่ได้รับเงินคืน'),
+        ),
       // ร้านแจ้งว่าคืนเงินแล้ว → ผู้ซื้อยืนยันเมื่อเงินเข้า
       if (can.contains('confirm_refund'))
         primary(
@@ -1379,6 +1416,18 @@ class _OrderPageState extends State<OrderPage> {
           buildDelivery(data),
           buildParty(data),
           buildTimes(data),
+          // ส่งเรื่องให้ทีมงานตรวจสอบ (ไม่เปลี่ยนสถานะคำสั่งซื้อ)
+          Center(
+            child: TextButton.icon(
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.muted,
+                minimumSize: const Size(0, 44),
+              ),
+              onPressed: () => reportProblem(category: 'order'),
+              icon: const Icon(Icons.support_agent_rounded, size: 19),
+              label: const Text('แจ้งปัญหาคำสั่งซื้อนี้'),
+            ),
+          ),
         ],
       ),
     );

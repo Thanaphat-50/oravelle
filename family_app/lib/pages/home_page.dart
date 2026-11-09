@@ -46,6 +46,8 @@ import 'settings_page.dart';
 import 'shop_page.dart';
 import 'user_profile_page.dart';
 import 'video_feed_page.dart';
+import 'support_center_page.dart';
+import 'support_ticket_page.dart';
 
 // หน้าย่อยของแท็บ "หน้าหลัก"
 
@@ -458,9 +460,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         );
         return;
 
+      // ทีมงานตอบ / เปลี่ยนสถานะคำร้อง → หน้าคำร้อง (เซิร์ฟเวอร์ตรวจว่าเป็นของเรา)
+      case 'support_ticket':
+        final int? ticketId = int.tryParse('${data['ticket_id'] ?? ''}');
+
+        if (ticketId != null) {
+          await navigator.push(
+            MaterialPageRoute(
+              builder: (_) => SupportTicketPage(ticketId: ticketId),
+            ),
+          );
+          return;
+        }
+
       case 'order_status':
         final int? orderId = int.tryParse('${data['order_id'] ?? ''}');
-
         if (orderId != null) {
           await navigator.push(
             MaterialPageRoute(builder: (_) => OrderPage(orderId: orderId)),
@@ -1283,6 +1297,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       case AccountMenuItem.settings:
         await openSettings();
 
+      case AccountMenuItem.help:
+        await Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const SupportCenterPage()));
       case AccountMenuItem.logout:
         await confirmLogout();
         return;

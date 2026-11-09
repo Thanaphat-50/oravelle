@@ -14,6 +14,7 @@ import '../theme/theme_controller.dart';
 import '../widgets/background_location_prompt.dart';
 import '../widgets/community_sheets.dart';
 import 'login_page.dart';
+import 'support_center_page.dart';
 
 // =======================================================
 // ตั้งค่า
@@ -1487,6 +1488,17 @@ class _SettingsPageState extends State<SettingsPage> {
                 danger: true,
                 onTap: openDeletion,
               ),
+          ]),
+          buildSectionTitle('ช่วยเหลือ'),
+          buildGroup([
+            buildActionRow(
+              icon: Icons.support_agent_rounded,
+              title: 'ช่วยเหลือและแจ้งปัญหา',
+              color: AppColors.sky,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SupportCenterPage()),
+              ),
+            ),
           ]),
           buildSectionTitle('เกี่ยวกับแอป'),
           buildGroup([

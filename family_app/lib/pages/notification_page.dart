@@ -9,6 +9,7 @@ import 'market_shop_page.dart';
 import 'my_shop_page.dart';
 import 'order_page.dart';
 import 'post_detail_page.dart';
+import 'support_ticket_page.dart';
 
 // แท็บในหน้าหลักที่ต้องเปิดหลังกดการแจ้งเตือน
 // (หน้าแจ้งเตือนปิดตัวเองแล้วส่งค่านี้กลับไป)
@@ -309,6 +310,19 @@ class _NotificationPageState extends State<NotificationPage> {
           return;
         }
 
+      // ทีมงานตอบ / เปลี่ยนสถานะคำร้อง → หน้าคำร้อง (เซิร์ฟเวอร์ตรวจว่าเป็นของเรา)
+      case 'support_ticket':
+        final int? ticketId = dataId('ticket_id');
+
+        if (ticketId != null) {
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => SupportTicketPage(ticketId: ticketId),
+            ),
+          );
+          return;
+        }
+
       // คำสั่งซื้อเปลี่ยนสถานะ → หน้าคำสั่งซื้อ (ผู้ซื้อ / ร้าน)
       case 'order_status':
         final int? orderId = dataId('order_id');
@@ -465,6 +479,11 @@ class _NotificationPageState extends State<NotificationPage> {
         return const _NotificationStyle(
           icon: Icons.receipt_long_rounded,
           color: marketColor,
+        );
+      case 'support_ticket':
+        return _NotificationStyle(
+          icon: Icons.support_agent_rounded,
+          color: AppColors.sky,
         );
       case 'promotion_status':
       case 'shop_review':
