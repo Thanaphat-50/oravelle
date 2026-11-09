@@ -28,11 +28,24 @@ class ActivityService {
   // GET ACTIVITIES
   // =====================================================
 
-  static Future<Map<String, dynamic>> getActivities() async {
+  // page: หน้าละ 20 รายการ / filter: all | mine | family | today | overdue | completed
+  // now: เวลาตามนาฬิกาเครื่อง (ใช้ตัดสิน "วันนี้" / "เกินกำหนด" บนเซิร์ฟเวอร์)
+  static Future<Map<String, dynamic>> getActivities({
+    int page = 1,
+    String filter = 'all',
+  }) async {
     final headers = await _headers();
 
+    final Uri uri = Uri.parse('$baseUrl/activities').replace(
+      queryParameters: {
+        'page': '$page',
+        'filter': filter,
+        'now': DateTime.now().toIso8601String(),
+      },
+    );
+
     final response = await ApiHelper.request(
-      () => http.get(Uri.parse('$baseUrl/activities'), headers: headers),
+      () => http.get(uri, headers: headers),
     );
 
     return ApiHelper.decode(response);
@@ -64,6 +77,34 @@ class ActivityService {
           'activity_date': activityDate?.toIso8601String(),
 
           'visibility': visibility,
+        }),
+      ),
+    );
+
+    return ApiHelper.decode(response);
+  }
+
+  // =====================================================
+  // แก้ไขชื่อ / รายละเอียด / วันเวลา (activityDate null = ล้างวันเวลา)
+  // วันเวลาส่งตามนาฬิกาเครื่อง (ไม่มีเขตเวลา) เหมือนตอนสร้าง
+  // =====================================================
+
+  static Future<Map<String, dynamic>> updateActivity({
+    required int activityId,
+    required String title,
+    String? description,
+    DateTime? activityDate,
+  }) async {
+    final headers = await _headers();
+
+    final response = await ApiHelper.request(
+      () => http.patch(
+        Uri.parse('$baseUrl/activities/$activityId'),
+        headers: headers,
+        body: jsonEncode({
+          'title': title,
+          'description': description,
+          'activity_date': activityDate?.toIso8601String(),
         }),
       ),
     );

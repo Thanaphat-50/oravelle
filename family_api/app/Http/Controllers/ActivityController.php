@@ -6,124 +6,194 @@ use App\Models\Activity;
 use App\Models\AppNotification;
 use App\Models\FamilyMember;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 class ActivityController extends Controller
 {
     // =====================================================
-    // GET /api/activities
+    // GET /api/activities?page=&filter=&now=
     //
-    // เห็น:
-    // - private ของตัวเอง
-    // - family ของ Family ที่ตัวเองอยู่
+    // filter: all | mine | family | today | overdue | completed (ทำงานกับข้อมูลทั้งหมดบนเซิร์ฟเวอร์)
+    // now:    เวลาปัจจุบันในเครื่องผู้ใช้ (เวลาท้องถิ่น ไม่มีเขตเวลา เช่น 2026-11-09T14:30:00)
+    //         ใช้ตัดสิน "วันนี้" / "เกินกำหนด" — ไม่ส่งมา = เวลาไทย
+    // page:   แบ่งหน้าละ 20 รายการ (แอปเวอร์ชันเก่าไม่ส่ง page → ได้ทั้งหมดเหมือนเดิม)
+    // counts: จำนวนของทุกตัวกรอง (นับจากข้อมูลทั้งหมด ไม่ใช่เฉพาะหน้าที่โหลด)
+    //
+    // activity_date = วันเวลาตามนาฬิกาในเครื่องผู้ใช้ (ไม่มีเขตเวลา) ส่งกลับรูปแบบเดียวกัน
     // =====================================================
+
+    public const FILTERS = ['all', 'mine', 'family', 'today', 'overdue', 'completed'];
+
+    private const PAGE_SIZE = 20;
 
     public function index(Request $request)
     {
+        $data = $request->validate([
+            'filter' => ['nullable', 'in:' . implode(',', self::FILTERS)],
+            'page' => 'nullable|integer|min:1',
+            'now' => 'nullable|date',
+        ]);
+
         $user = $request->user();
 
-        $membership = FamilyMember::where(
-            'user_id',
-            $user->id
-        )->first();
+        $membership = FamilyMember::where('user_id', $user->id)->first();
 
-        $query = Activity::query()
-            ->with([
-                'user:id,name,profile_photo',
-            ])
-            ->where(function ($query) use (
-                $user,
-                $membership
-            ) {
-                // -----------------------------------------
-                // Private ของตัวเอง
-                // -----------------------------------------
+        $now = $this->localNow($data['now'] ?? null);
 
-                $query->where(function ($privateQuery) use ($user) {
-                    $privateQuery
-                        ->where(
-                            'user_id',
-                            $user->id
-                        )
-                        ->where(
-                            'visibility',
-                            'private'
-                        );
-                });
+        $visible = fn () => $this->visibleTo($user, $membership);
 
-                // -----------------------------------------
-                // Family activity
-                // -----------------------------------------
-
-                if ($membership) {
-                    $query->orWhere(function ($familyQuery) use ($membership) {
-                        $familyQuery
-                            ->where(
-                                'family_id',
-                                $membership->family_id
-                            )
-                            ->where(
-                                'visibility',
-                                'family'
-                            );
-                    });
-                }
-            })
+        $query = $this->applyFilter($visible(), $data['filter'] ?? 'all', $user, $now)
+            ->with(['user:id,name,profile_photo'])
             ->orderBy('is_completed')
             ->orderByRaw('activity_date IS NULL')
             ->orderBy('activity_date')
-            ->orderByDesc('created_at');
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
 
-        $activities = $query
-            ->get()
-            ->map(function ($activity) use (
-                $user,
-                $membership
-            ) {
-                $isMine =
-                    $activity->user_id === $user->id;
+        $paged = isset($data['page']);
 
-                $canManage =
-                    $isMine;
+        if ($paged) {
+            $paginator = $query->simplePaginate(self::PAGE_SIZE, ['*'], 'page', (int) $data['page']);
+            $items = collect($paginator->items());
+        } else {
+            $items = $query->get();
+        }
 
-                // Family activity ต้องยังอยู่ใน Family เดิม
-                if (
-                    $activity->visibility === 'family'
-                    && (
-                        !$membership
-                        || $membership->family_id
-                            !== $activity->family_id
-                    )
-                ) {
-                    $canManage = false;
-                }
-
-                $activity->setAttribute(
-                    'is_mine',
-                    $isMine
-                );
-
-                $activity->setAttribute(
-                    'can_manage',
-                    $canManage
-                );
-
-                return $activity;
-            });
+        $activities = $items->map(fn (Activity $activity) => $this->withFlags($activity, $user, $membership))->values();
 
         return response()->json([
             'status' => true,
 
             'activities' => $activities,
 
-            'family' => [
-                'has_family' =>
-                    $membership !== null,
+            'page' => $paged ? $paginator->currentPage() : 1,
+            'has_more' => $paged && $paginator->hasMorePages(),
 
-                'id' =>
-                    $membership
-                        ? $membership->family_id
-                        : null,
+            'counts' => collect(self::FILTERS)
+                ->mapWithKeys(fn (string $filter) => [
+                    $filter => $this->applyFilter($visible(), $filter, $user, $now)->count(),
+                ]),
+
+            'family' => [
+                'has_family' => $membership !== null,
+                'id' => $membership?->family_id,
             ],
+        ]);
+    }
+
+    // กิจกรรมที่ผู้ใช้เห็นได้: ส่วนตัวของตัวเอง + ที่แชร์ในกลุ่มที่อยู่ตอนนี้
+    private function visibleTo($user, ?FamilyMember $membership)
+    {
+        return Activity::query()->where(function ($query) use ($user, $membership) {
+            $query->where(fn ($private) => $private
+                ->where('user_id', $user->id)
+                ->where('visibility', 'private'));
+
+            if ($membership) {
+                $query->orWhere(fn ($family) => $family
+                    ->where('family_id', $membership->family_id)
+                    ->where('visibility', 'family'));
+            }
+        });
+    }
+
+    private function applyFilter($query, string $filter, $user, Carbon $now)
+    {
+        return match ($filter) {
+            'mine' => $query->where('user_id', $user->id),
+            'family' => $query->where('visibility', 'family'),
+            'today' => $query->whereBetween('activity_date', [
+                $now->copy()->startOfDay(),
+                $now->copy()->endOfDay(),
+            ]),
+            'overdue' => $query->where('is_completed', false)
+                ->whereNotNull('activity_date')
+                ->where('activity_date', '<', $now),
+            'completed' => $query->where('is_completed', true),
+            default => $query,
+        };
+    }
+
+    // เวลาตามนาฬิกาผู้ใช้ เก็บแบบไม่มีเขตเวลา (เทียบกับ activity_date ตรง ๆ)
+    private function localNow(?string $now): Carbon
+    {
+        $wallClock = $now !== null
+            ? Carbon::parse($now)->format('Y-m-d H:i:s')
+            : now('Asia/Bangkok')->format('Y-m-d H:i:s');
+
+        return Carbon::createFromFormat('Y-m-d H:i:s', $wallClock, config('app.timezone'));
+    }
+
+    private function withFlags(Activity $activity, $user, ?FamilyMember $membership): Activity
+    {
+        $isMine = (int) $activity->user_id === (int) $user->id;
+
+        // กิจกรรมกลุ่ม: จัดการได้เมื่อยังอยู่กลุ่มเดิม
+        $canManage = $isMine && (
+            $activity->visibility !== 'family'
+            || ($membership && (int) $membership->family_id === (int) $activity->family_id)
+        );
+
+        $activity->setAttribute('is_mine', $isMine);
+        $activity->setAttribute('can_manage', $canManage);
+
+        return $activity;
+    }
+
+    // =====================================================
+    // PATCH /api/activities/{activity} {title, description, activity_date}
+    // แก้ไขได้เฉพาะเจ้าของ (กิจกรรมกลุ่ม: ต้องยังอยู่กลุ่มเดิม)
+    // การมองเห็น (ส่วนตัว/กลุ่ม) เปลี่ยนที่ /visibility
+    // =====================================================
+
+    public function update(Request $request, Activity $activity)
+    {
+        $user = $request->user();
+
+        if (!$this->canSee($activity, $user)) {
+            return $this->notFound();
+        }
+
+        if ((int) $activity->user_id !== (int) $user->id) {
+            return response()->json([
+                'status' => false,
+                'message' => 'เฉพาะผู้สร้างกิจกรรมเท่านั้นที่แก้ไขได้',
+            ], 403);
+        }
+
+        $membership = FamilyMember::where('user_id', $user->id)->first();
+
+        if ($activity->visibility === 'family'
+            && (!$membership || (int) $membership->family_id !== (int) $activity->family_id)) {
+            return response()->json([
+                'status' => false,
+                'message' => 'คุณไม่ได้อยู่ในกลุ่มของกิจกรรมนี้แล้ว',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string|max:2000',
+            'activity_date' => 'nullable|date',
+        ], [
+            'title.required' => 'กรุณาใส่ชื่อกิจกรรม',
+            'title.max' => 'ชื่อกิจกรรมยาวได้ไม่เกิน 255 ตัวอักษร',
+            'description.max' => 'รายละเอียดยาวได้ไม่เกิน 2000 ตัวอักษร',
+            'activity_date.date' => 'วันเวลาไม่ถูกต้อง',
+        ]);
+
+        $activity->update([
+            'title' => trim($validated['title']),
+            'description' => filled($validated['description'] ?? null) ? trim($validated['description']) : null,
+            'activity_date' => $validated['activity_date'] ?? null,
+        ]);
+
+        $activity->load(['user:id,name,profile_photo']);
+
+        return response()->json([
+            'status' => true,
+            'message' => 'บันทึกการแก้ไขแล้ว',
+            'activity' => $this->withFlags($activity, $user, $membership),
         ]);
     }
 

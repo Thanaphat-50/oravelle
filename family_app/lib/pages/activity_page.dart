@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/activity_service.dart';
+import '../services/api_helper.dart';
 import '../theme/app_theme.dart';
 
 class ActivityPage extends StatefulWidget {
@@ -18,8 +19,16 @@ class _ActivityPageState extends State<ActivityPage> {
 
   List<dynamic> activities = [];
 
+  // ตัวกรองทำงานบนเซิร์ฟเวอร์ (ทุกกิจกรรม ไม่ใช่เฉพาะที่โหลดมา)
   String selectedFilter = 'all';
 
+  // แบ่งหน้า: โหลดเพิ่มเมื่อเลื่อนใกล้ท้ายรายการ
+  int page = 1;
+  bool hasMore = false;
+  bool isLoadingMore = false;
+
+  // จำนวนของแต่ละตัวกรอง (นับจากทุกกิจกรรมบนเซิร์ฟเวอร์)
+  Map<String, int> counts = {};
   @override
   void initState() {
     super.initState();
@@ -32,17 +41,22 @@ class _ActivityPageState extends State<ActivityPage> {
   // =====================================================
 
   Future<void> loadActivities() async {
-    try {
-      final result = await ActivityService.getActivities();
+    final String filter = selectedFilter;
 
-      if (!mounted) return;
+    try {
+      final result = await ActivityService.getActivities(filter: filter);
+
+      // ระหว่างรอ ผู้ใช้เปลี่ยนตัวกรองไปแล้ว → ไม่ใช้ผลเก่า
+      if (!mounted || filter != selectedFilter) return;
 
       if (result['status'] == true) {
         final family = result['family'];
 
         setState(() {
           activities = result['activities'] ?? [];
-
+          page = 1;
+          hasMore = result['has_more'] == true;
+          applyCounts(result['counts']);
           if (family is Map) {
             hasFamily = family['has_family'] == true;
           } else {
@@ -55,7 +69,7 @@ class _ActivityPageState extends State<ActivityPage> {
     } catch (e) {
       if (!mounted) return;
 
-      showMessage('โหลดกิจกรรมไม่สำเร็จ');
+      showMessage(ApiHelper.messageOf(e));
     } finally {
       if (mounted) {
         setState(() {
@@ -65,10 +79,78 @@ class _ActivityPageState extends State<ActivityPage> {
     }
   }
 
+  void applyCounts(dynamic raw) {
+    if (raw is! Map) return;
+
+    counts = {
+      for (final entry in raw.entries)
+        if (entry.value is num)
+          entry.key.toString(): (entry.value as num).toInt(),
+    };
+  }
+
+  // หน้าถัดไป (เลื่อนใกล้ท้ายรายการ)
+  Future<void> loadMore() async {
+    if (!hasMore || isLoadingMore || isLoading) return;
+
+    final String filter = selectedFilter;
+
+    setState(() => isLoadingMore = true);
+
+    try {
+      final result = await ActivityService.getActivities(
+        page: page + 1,
+        filter: filter,
+      );
+
+      if (!mounted || filter != selectedFilter) return;
+
+      if (result['status'] == true) {
+        final dynamic raw = result['activities'];
+
+        setState(() {
+          final Set<dynamic> known = activities
+              .whereType<Map>()
+              .map((item) => item['id'])
+              .toSet();
+
+          if (raw is List) {
+            activities = [
+              ...activities,
+              ...raw.where(
+                (item) => item is Map && !known.contains(item['id']),
+              ),
+            ];
+          }
+
+          page++;
+          hasMore = result['has_more'] == true;
+          applyCounts(result['counts']);
+        });
+      }
+    } catch (e) {
+      if (mounted) showMessage(ApiHelper.messageOf(e));
+    } finally {
+      if (mounted) setState(() => isLoadingMore = false);
+    }
+  }
+
+  void changeFilter(String filter) {
+    if (filter == selectedFilter) return;
+
+    setState(() {
+      selectedFilter = filter;
+      activities = [];
+      hasMore = false;
+      isLoading = true;
+    });
+
+    loadActivities();
+  }
+
   // =====================================================
   // HELPERS
   // =====================================================
-
   bool boolValue(dynamic value) {
     return value == true || value == 1 || value == '1';
   }
@@ -206,17 +288,8 @@ class _ActivityPageState extends State<ActivityPage> {
         continue;
       }
 
-      final activity = Map<String, dynamic>.from(item);
-
-      if (selectedFilter == 'mine' && !isMine(activity)) {
-        continue;
-      }
-
-      if (selectedFilter == 'family' && visibility(activity) != 'family') {
-        continue;
-      }
-
-      items.add(activity);
+      // เซิร์ฟเวอร์กรองตาม selectedFilter มาแล้ว
+      items.add(Map<String, dynamic>.from(item));
     }
 
     return items;
@@ -226,14 +299,26 @@ class _ActivityPageState extends State<ActivityPage> {
   // CREATE SHEET
   // =====================================================
 
-  Future<void> showCreateActivitySheet() async {
-    String title = '';
-    String description = '';
+  // เพิ่ม / แก้ไขกิจกรรม (editing = กิจกรรมที่แก้)
+  // draft = ข้อมูลที่กรอกไว้ (บันทึกไม่สำเร็จ → เปิดฟอร์มเดิมพร้อมข้อมูลให้แก้แล้วกดใหม่)
+  Future<void> showCreateActivitySheet({
+    Map<String, dynamic>? editing,
+    Map<String, dynamic>? draft,
+  }) async {
+    String title = (draft?['title'] ?? editing?['title'])?.toString() ?? '';
+    String description =
+        (draft?['description'] ?? editing?['description'])?.toString() ?? '';
 
-    String selectedVisibility = 'private';
+    String selectedVisibility = draft?['visibility']?.toString() ?? 'private';
 
-    DateTime? selectedDateTime;
+    DateTime? selectedDateTime = draft != null
+        ? draft['activity_date'] as DateTime?
+        : parseDate(editing?['activity_date']);
 
+    final bool isEdit = editing != null;
+
+    final titleController = TextEditingController(text: title);
+    final descriptionController = TextEditingController(text: description);
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
 
@@ -360,7 +445,7 @@ class _ActivityPageState extends State<ActivityPage> {
 
                               children: [
                                 Text(
-                                  'เพิ่มกิจกรรม',
+                                  isEdit ? 'แก้ไขกิจกรรม' : 'เพิ่มกิจกรรม',
                                   style: TextStyle(
                                     color: AppColors.navy,
                                     fontSize: 21,
@@ -371,7 +456,9 @@ class _ActivityPageState extends State<ActivityPage> {
                                 SizedBox(height: 3),
 
                                 Text(
-                                  'สร้างแผนของคุณหรือแชร์ให้กลุ่ม',
+                                  isEdit
+                                      ? 'แก้ชื่อ รายละเอียด หรือวันเวลา'
+                                      : 'สร้างแผนของคุณหรือแชร์ให้กลุ่ม',
                                   style: TextStyle(
                                     color: AppColors.muted,
                                     fontSize: 12,
@@ -408,7 +495,9 @@ class _ActivityPageState extends State<ActivityPage> {
                       const SizedBox(height: 8),
 
                       TextField(
-                        autofocus: true,
+                        controller: titleController,
+
+                        autofocus: !isEdit,
 
                         textInputAction: TextInputAction.next,
 
@@ -440,6 +529,8 @@ class _ActivityPageState extends State<ActivityPage> {
                       const SizedBox(height: 8),
 
                       TextField(
+                        controller: descriptionController,
+
                         minLines: 3,
                         maxLines: 5,
 
@@ -457,112 +548,116 @@ class _ActivityPageState extends State<ActivityPage> {
                       const SizedBox(height: 20),
 
                       // =================================
-                      // VISIBILITY
+                      // VISIBILITY (แก้ไข: เปลี่ยนที่เมนู ส่วนตัว/แชร์กลุ่ม)
                       // =================================
-                      Text(
-                        'ใครสามารถเห็นกิจกรรมนี้?',
-                        style: TextStyle(
-                          color: AppColors.navy,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-
-                      const SizedBox(height: 5),
-
-                      Text(
-                        'เลือกว่ากิจกรรมนี้เป็นเรื่องส่วนตัวหรือแชร์กับกลุ่ม',
-                        style: TextStyle(color: AppColors.muted, fontSize: 10),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _VisibilityChoice(
-                              icon: Icons.lock_outline_rounded,
-
-                              title: 'ส่วนตัว',
-
-                              subtitle: 'เฉพาะคุณ',
-
-                              selected: selectedVisibility == 'private',
-
-                              onTap: () {
-                                setSheetState(() {
-                                  selectedVisibility = 'private';
-                                });
-                              },
-                            ),
+                      if (!isEdit) ...[
+                        Text(
+                          'ใครสามารถเห็นกิจกรรมนี้?',
+                          style: TextStyle(
+                            color: AppColors.navy,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
                           ),
+                        ),
 
-                          const SizedBox(width: 10),
+                        const SizedBox(height: 5),
 
-                          Expanded(
-                            child: _VisibilityChoice(
-                              icon: Icons.groups_rounded,
+                        Text(
+                          'เลือกว่ากิจกรรมนี้เป็นเรื่องส่วนตัวหรือแชร์กับกลุ่ม',
+                          style: TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 10,
+                          ),
+                        ),
 
-                              title: 'กลุ่ม',
+                        const SizedBox(height: 12),
 
-                              subtitle: hasFamily
-                                  ? 'สมาชิกเห็นได้'
-                                  : 'ยังไม่มี Family',
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _VisibilityChoice(
+                                icon: Icons.lock_outline_rounded,
 
-                              selected: selectedVisibility == 'family',
+                                title: 'ส่วนตัว',
 
-                              enabled: hasFamily,
+                                subtitle: 'เฉพาะคุณ',
 
-                              onTap: () {
-                                if (!hasFamily) {
-                                  return;
-                                }
+                                selected: selectedVisibility == 'private',
 
-                                setSheetState(() {
-                                  selectedVisibility = 'family';
-                                });
-                              },
+                                onTap: () {
+                                  setSheetState(() {
+                                    selectedVisibility = 'private';
+                                  });
+                                },
+                              ),
+                            ),
+
+                            const SizedBox(width: 10),
+
+                            Expanded(
+                              child: _VisibilityChoice(
+                                icon: Icons.groups_rounded,
+
+                                title: 'กลุ่ม',
+
+                                subtitle: hasFamily
+                                    ? 'สมาชิกเห็นได้'
+                                    : 'ยังไม่มี Family',
+
+                                selected: selectedVisibility == 'family',
+
+                                enabled: hasFamily,
+
+                                onTap: () {
+                                  if (!hasFamily) {
+                                    return;
+                                  }
+
+                                  setSheetState(() {
+                                    selectedVisibility = 'family';
+                                  });
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        if (!hasFamily) ...[
+                          const SizedBox(height: 10),
+
+                          Container(
+                            padding: const EdgeInsets.all(11),
+
+                            decoration: BoxDecoration(
+                              color: AppColors.warm.withValues(alpha: 0.10),
+
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.info_outline_rounded,
+                                  color: AppColors.warm,
+                                  size: 18,
+                                ),
+
+                                SizedBox(width: 8),
+
+                                Expanded(
+                                  child: Text(
+                                    'เข้าร่วมหรือสร้างกลุ่มก่อน จึงจะแชร์กิจกรรมได้',
+                                    style: TextStyle(
+                                      color: AppColors.muted,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
-                      ),
-
-                      if (!hasFamily) ...[
-                        const SizedBox(height: 10),
-
-                        Container(
-                          padding: const EdgeInsets.all(11),
-
-                          decoration: BoxDecoration(
-                            color: AppColors.warm.withValues(alpha: 0.10),
-
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.info_outline_rounded,
-                                color: AppColors.warm,
-                                size: 18,
-                              ),
-
-                              SizedBox(width: 8),
-
-                              Expanded(
-                                child: Text(
-                                  'เข้าร่วมหรือสร้างกลุ่มก่อน จึงจะแชร์กิจกรรมได้',
-                                  style: TextStyle(
-                                    color: AppColors.muted,
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
                       ],
-
                       const SizedBox(height: 20),
 
                       // =================================
@@ -692,13 +787,16 @@ class _ActivityPageState extends State<ActivityPage> {
                         },
 
                         icon: Icon(
-                          selectedVisibility == 'family'
+                          isEdit
+                              ? Icons.save_outlined
+                              : selectedVisibility == 'family'
                               ? Icons.group_add_rounded
                               : Icons.add_task_rounded,
                         ),
-
                         label: Text(
-                          selectedVisibility == 'family'
+                          isEdit
+                              ? 'บันทึกการแก้ไข'
+                              : selectedVisibility == 'family'
                               ? 'สร้างและแชร์กับกลุ่ม'
                               : 'สร้างกิจกรรมส่วนตัว',
                         ),
@@ -713,6 +811,12 @@ class _ActivityPageState extends State<ActivityPage> {
       },
     );
 
+    // ทิ้ง controller หลังฟอร์มปิดเสร็จ (ระหว่างแอนิเมชันปิด ช่องกรอกยังใช้อยู่)
+    Future<void>.delayed(const Duration(seconds: 1), () {
+      titleController.dispose();
+      descriptionController.dispose();
+    });
+
     if (!mounted || result == null) {
       return;
     }
@@ -721,22 +825,74 @@ class _ActivityPageState extends State<ActivityPage> {
 
     if (!mounted) return;
 
-    await createActivity(
-      title: result['title'].toString(),
+    final bool saved = isEdit
+        ? await updateActivity(editing, result)
+        : await createActivity(
+            title: result['title'].toString(),
+            description: result['description']?.toString() ?? '',
+            activityDate: result['activity_date'] as DateTime?,
+            visibility: result['visibility']?.toString() ?? 'private',
+          );
 
-      description: result['description']?.toString() ?? '',
+    // บันทึกไม่สำเร็จ → เปิดฟอร์มเดิมพร้อมข้อมูลที่กรอกไว้ (ปิดฟอร์มได้ถ้าไม่ต้องการ)
+    if (!saved && mounted) {
+      await showCreateActivitySheet(editing: editing, draft: result);
+    }
+  }
 
-      activityDate: result['activity_date'] as DateTime?,
+  // =====================================================
+  // UPDATE API
+  // =====================================================
 
-      visibility: result['visibility']?.toString() ?? 'private',
-    );
+  Future<bool> updateActivity(
+    Map<String, dynamic> activity,
+    Map<String, dynamic> values,
+  ) async {
+    final dynamic id = activity['id'];
+
+    if (id is! num) return true;
+
+    setState(() => isCreating = true);
+
+    try {
+      final String description = values['description']?.toString() ?? '';
+
+      final result = await ActivityService.updateActivity(
+        activityId: id.toInt(),
+        title: values['title'].toString(),
+        description: description.isEmpty ? null : description,
+        activityDate: values['activity_date'] as DateTime?,
+      );
+
+      if (!mounted) return true;
+
+      if (result['status'] == true) {
+        await loadActivities();
+
+        if (mounted) showMessage('บันทึกการแก้ไขแล้ว');
+
+        return true;
+      }
+
+      showMessage(result['message']?.toString() ?? 'บันทึกไม่สำเร็จ');
+
+      // ข้อมูลไม่ถูกต้อง (422) → เปิดฟอร์มเดิมให้แก้
+      // ไม่มีสิทธิ์แล้ว (ออกจากกลุ่ม / ถูกลบ) → ไม่ต้องเปิดฟอร์มซ้ำ
+      return result['errors'] == null;
+    } catch (e) {
+      if (mounted) showMessage(ApiHelper.messageOf(e));
+
+      return false;
+    } finally {
+      if (mounted) setState(() => isCreating = false);
+    }
   }
 
   // =====================================================
   // CREATE API
   // =====================================================
 
-  Future<void> createActivity({
+  Future<bool> createActivity({
     required String title,
     required String description,
     required String visibility,
@@ -757,25 +913,29 @@ class _ActivityPageState extends State<ActivityPage> {
         visibility: visibility,
       );
 
-      if (!mounted) return;
+      if (!mounted) return true;
 
       if (result['status'] == true) {
         await loadActivities();
 
-        if (!mounted) return;
+        if (!mounted) return true;
 
         showMessage(
           visibility == 'family'
               ? 'แชร์กิจกรรมกับกลุ่มแล้ว'
               : 'สร้างกิจกรรมส่วนตัวแล้ว',
         );
-      } else {
-        showMessage(result['message'] ?? 'เพิ่มกิจกรรมไม่สำเร็จ');
-      }
-    } catch (e) {
-      if (!mounted) return;
 
-      showMessage('เกิดข้อผิดพลาด: $e');
+        return true;
+      }
+
+      showMessage(result['message']?.toString() ?? 'เพิ่มกิจกรรมไม่สำเร็จ');
+
+      return false;
+    } catch (e) {
+      if (mounted) showMessage(ApiHelper.messageOf(e));
+
+      return false;
     } finally {
       if (mounted) {
         setState(() {
@@ -1021,25 +1181,13 @@ class _ActivityPageState extends State<ActivityPage> {
   // PLANNER HEADER
   // =====================================================
 
+  // ตัวเลขจากเซิร์ฟเวอร์ (นับทุกกิจกรรม ไม่ใช่เฉพาะหน้าที่โหลด)
   Widget buildPlannerHeader() {
-    final total = activities.length;
+    final total = counts['all'] ?? activities.length;
 
-    final completed = activities.where((item) {
-      if (item is! Map) {
-        return false;
-      }
+    final completed = counts['completed'] ?? 0;
 
-      return boolValue(item['is_completed']);
-    }).length;
-
-    final familyCount = activities.where((item) {
-      if (item is! Map) {
-        return false;
-      }
-
-      return item['visibility'] == 'family';
-    }).length;
-
+    final familyCount = counts['family'] ?? 0;
     final progress = total == 0 ? 0.0 : completed / total;
 
     return Container(
@@ -1158,55 +1306,34 @@ class _ActivityPageState extends State<ActivityPage> {
   // FILTERS
   // =====================================================
 
+  // ตัวกรอง (เซิร์ฟเวอร์กรองจากกิจกรรมทั้งหมด) + จำนวนของแต่ละตัวกรอง
   Widget buildFilters() {
+    const List<(String, String, IconData?)> filters = [
+      ('all', 'ทั้งหมด', null),
+      ('today', 'วันนี้', Icons.today_rounded),
+      ('overdue', 'เกินกำหนด', Icons.alarm_rounded),
+      ('completed', 'เสร็จแล้ว', Icons.task_alt_rounded),
+      ('mine', 'ของฉัน', Icons.person_rounded),
+      ('family', 'กลุ่ม', Icons.groups_rounded),
+    ];
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-
       child: Row(
         children: [
-          _FilterChip(
-            text: 'ทั้งหมด',
-
-            selected: selectedFilter == 'all',
-
-            onTap: () {
-              setState(() {
-                selectedFilter = 'all';
-              });
-            },
-          ),
-
-          const SizedBox(width: 8),
-
-          _FilterChip(
-            text: 'ของฉัน',
-
-            icon: Icons.person_rounded,
-
-            selected: selectedFilter == 'mine',
-
-            onTap: () {
-              setState(() {
-                selectedFilter = 'mine';
-              });
-            },
-          ),
-
-          const SizedBox(width: 8),
-
-          _FilterChip(
-            text: 'กลุ่ม',
-
-            icon: Icons.groups_rounded,
-
-            selected: selectedFilter == 'family',
-
-            onTap: () {
-              setState(() {
-                selectedFilter = 'family';
-              });
-            },
-          ),
+          for (final (key, label, icon) in filters) ...[
+            _FilterChip(
+              text: switch (counts[key]) {
+                final int count when key != 'all' && count > 0 =>
+                  '$label $count',
+                _ => label,
+              },
+              icon: icon,
+              selected: selectedFilter == key,
+              onTap: () => changeFilter(key),
+            ),
+            const SizedBox(width: 8),
+          ],
         ],
       ),
     );
@@ -1468,10 +1595,13 @@ class _ActivityPageState extends State<ActivityPage> {
                 tooltip: 'จัดการ',
 
                 onSelected: (value) {
+                  if (value == 'edit') {
+                    showCreateActivitySheet(editing: activity);
+                  }
+
                   if (value == 'toggle') {
                     toggleActivity(activity);
                   }
-
                   if (value == 'private') {
                     changeVisibility(activity, 'private');
                   }
@@ -1486,6 +1616,20 @@ class _ActivityPageState extends State<ActivityPage> {
                 },
 
                 itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'edit',
+
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, color: AppColors.primary),
+
+                        const SizedBox(width: 10),
+
+                        const Text('แก้ไข'),
+                      ],
+                    ),
+                  ),
+
                   PopupMenuItem(
                     value: 'toggle',
 
@@ -1540,9 +1684,7 @@ class _ActivityPageState extends State<ActivityPage> {
 
                           const SizedBox(width: 10),
 
-                          Text(
-                            hasFamily ? 'แชร์กับกลุ่ม' : 'ยังไม่มีกลุ่ม',
-                          ),
+                          Text(hasFamily ? 'แชร์กับกลุ่ม' : 'ยังไม่มีกลุ่ม'),
                         ],
                       ),
                     ),
@@ -1589,6 +1731,32 @@ class _ActivityPageState extends State<ActivityPage> {
   // =====================================================
   // EMPTY
   // =====================================================
+
+  // ตัวกรองนี้ไม่มีกิจกรรม (ยังมีในตัวกรองอื่น)
+  Widget buildFilterEmpty() {
+    const Map<String, String> messages = {
+      'mine': 'ยังไม่มีกิจกรรมที่คุณสร้าง',
+      'family': 'ยังไม่มีกิจกรรมที่แชร์ในกลุ่ม',
+      'today': 'วันนี้ไม่มีกิจกรรม',
+      'overdue': 'ไม่มีกิจกรรมที่เกินกำหนด เยี่ยมมาก!',
+      'completed': 'ยังไม่มีกิจกรรมที่ทำเสร็จ',
+    };
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 50, horizontal: 20),
+      child: Column(
+        children: [
+          Icon(Icons.filter_alt_off_outlined, size: 40, color: AppColors.muted),
+          const SizedBox(height: 10),
+          Text(
+            messages[selectedFilter] ?? 'ไม่มีกิจกรรม',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.muted, fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget buildEmptyState() {
     return Container(
@@ -1686,7 +1854,8 @@ class _ActivityPageState extends State<ActivityPage> {
       backgroundColor: Colors.transparent,
 
       // ยังไม่มีกิจกรรม → ใช้ปุ่มในการ์ดว่างแทน (ไม่ให้มีปุ่มซ้อนกัน 2 ปุ่ม)
-      floatingActionButton: displayed.isEmpty && !isLoading
+      floatingActionButton:
+          displayed.isEmpty && !isLoading && selectedFilter == 'all'
           ? null
           : FloatingActionButton.extended(
               heroTag: 'add_activity',
@@ -1710,90 +1879,105 @@ class _ActivityPageState extends State<ActivityPage> {
 
       body: RefreshIndicator(
         color: AppColors.primary,
-
         onRefresh: loadActivities,
+        // เลื่อนใกล้ท้ายรายการ → โหลดหน้าถัดไป
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if (notification.metrics.extentAfter < 400) loadMore();
 
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
+            return false;
+          },
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
 
-          padding: const EdgeInsets.fromLTRB(17, 12, 17, 105),
+            padding: const EdgeInsets.fromLTRB(17, 12, 17, 105),
 
-          children: [
-            buildPlannerHeader(),
+            children: [
+              buildPlannerHeader(),
 
-            const SizedBox(height: 25),
+              const SizedBox(height: 25),
 
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
 
-                    children: [
-                      Text(
-                        'กิจกรรม',
-                        style: TextStyle(
-                          color: AppColors.navy,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
+                      children: [
+                        Text(
+                          'กิจกรรม',
+                          style: TextStyle(
+                            color: AppColors.navy,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                      ),
 
-                      SizedBox(height: 3),
+                        SizedBox(height: 3),
 
-                      Text(
-                        'แผนส่วนตัวและกิจกรรมของกลุ่ม',
+                        Text(
+                          'แผนส่วนตัวและกิจกรรมของกลุ่ม',
 
-                        style: TextStyle(color: AppColors.muted, fontSize: 11),
-                      ),
-                    ],
-                  ),
-                ),
-
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 5,
-                  ),
-
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.09),
-
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-
-                  child: Text(
-                    '${displayed.length} รายการ',
-
-                    style: TextStyle(
-                      color: AppColors.primary,
-
-                      fontSize: 10,
-
-                      fontWeight: FontWeight.w700,
+                          style: TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
+
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 5,
+                    ),
+
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.09),
+
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+
+                    child: Text(
+                      '${counts[selectedFilter] ?? displayed.length} รายการ',
+
+                      style: TextStyle(
+                        color: AppColors.primary,
+
+                        fontSize: 10,
+
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 14),
+
+              buildFilters(),
+
+              const SizedBox(height: 15),
+
+              if (isLoading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 60),
+
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (displayed.isEmpty)
+                selectedFilter == 'all' ? buildEmptyState() : buildFilterEmpty()
+              else ...[
+                ...displayed.map(buildActivityCard),
+                if (isLoadingMore)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 18),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
               ],
-            ),
-
-            const SizedBox(height: 14),
-
-            buildFilters(),
-
-            const SizedBox(height: 15),
-
-            if (isLoading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 60),
-
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (displayed.isEmpty)
-              buildEmptyState()
-            else
-              ...displayed.map(buildActivityCard),
-          ],
+            ],
+          ),
         ),
       ),
     );

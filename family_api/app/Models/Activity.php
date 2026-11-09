@@ -20,7 +20,9 @@ class Activity extends Model
     ];
 
     protected $casts = [
-        'activity_date' => 'datetime',
+        // วันเวลาตามนาฬิกาในเครื่องผู้ใช้ (ไม่มีเขตเวลา) ส่งกลับแบบเดียวกับที่แอปส่งมา
+        // เดิมส่งกลับเป็น UTC (มี Z) แอปเลยบวกเวลาเพิ่มตามเขตเวลาเครื่อง (ไทย +7 ชั่วโมง)
+        'activity_date' => 'datetime:Y-m-d\TH:i:s',
         'is_completed' => 'boolean',
     ];
 

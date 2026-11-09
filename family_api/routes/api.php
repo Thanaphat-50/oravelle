@@ -671,6 +671,12 @@ Route::middleware('auth:sanctum')->group(function () {
         'toggle'
     ]);
 
+    // แก้ไขชื่อ / รายละเอียด / วันเวลา (เจ้าของเท่านั้น)
+    Route::patch('/activities/{activity}', [
+        ActivityController::class,
+        'update'
+    ]);
+
     Route::delete('/activities/{activity}', [
         ActivityController::class,
         'destroy'
