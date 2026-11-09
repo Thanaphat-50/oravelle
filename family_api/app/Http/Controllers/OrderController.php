@@ -684,6 +684,18 @@ class OrderController extends Controller
         );
     }
 
+    // ผู้ซื้อ: ได้รับเงินคืนแล้ว (หลังร้านแจ้งว่าคืนเงิน)
+    public function refundReceived(Request $request, Order $order)
+    {
+        return $this->act(
+            $request,
+            $order,
+            'confirm_refund',
+            'ขอบคุณที่ยืนยัน แจ้งร้านแล้วว่าคุณได้รับเงินคืน',
+            fn (Closure $allowed) => $order->confirmRefund($allowed)
+        );
+    }
+
     public function received(Request $request, Order $order)
     {
         return $this->act($request, $order, 'received', 'ขอบคุณที่ยืนยัน คำสั่งซื้อสำเร็จแล้ว', fn (Closure $allowed) => $order->complete(Order::BY_BUYER, $allowed));

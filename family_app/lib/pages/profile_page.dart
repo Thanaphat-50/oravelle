@@ -1,7 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../data/market_data.dart';
+import '../services/api_helper.dart';
 import '../services/profile_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/profile_intro.dart';
@@ -10,6 +13,7 @@ import 'feed_page.dart';
 import 'follow_list_page.dart';
 import 'my_shop_page.dart';
 import 'orders_page.dart';
+import 'photo_crop_page.dart';
 import 'saved_products_page.dart';
 import 'settings_page.dart';
 import 'user_profile_page.dart';
@@ -296,9 +300,20 @@ class _ProfilePageState extends State<ProfilePage> {
 
       if (image == null || !mounted) return;
 
+      // ครอปเป็นสี่เหลี่ยมจัตุรัสและดูตัวอย่างในวงกลมก่อนอัปโหลด
+      final Uint8List original = await image.readAsBytes();
+
+      if (!mounted) return;
+
+      final Uint8List? cropped = await Navigator.of(context).push<Uint8List>(
+        MaterialPageRoute(builder: (_) => PhotoCropPage(bytes: original)),
+      );
+
+      if (cropped == null || !mounted) return;
+
       setState(() => isUploadingPhoto = true);
 
-      final result = await ProfileService.uploadProfilePhoto(image.path);
+      final result = await ProfileService.uploadProfilePhotoBytes(cropped);
 
       if (!mounted) return;
 
@@ -314,7 +329,7 @@ class _ProfilePageState extends State<ProfilePage> {
     } catch (e) {
       if (!mounted) return;
 
-      showMessage('อัปโหลดรูปไม่สำเร็จ: $e');
+      showMessage(ApiHelper.messageOf(e));
     } finally {
       if (mounted) setState(() => isUploadingPhoto = false);
     }

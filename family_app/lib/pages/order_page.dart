@@ -952,27 +952,43 @@ class _OrderPageState extends State<OrderPage> {
     );
   }
 
-  // ยกเลิกหลังลูกค้าจ่ายเงินแล้ว: รอร้านคืนเงิน / คืนเงินแล้ว
+  // ยกเลิกหลังลูกค้าจ่ายเงินแล้ว (3 ขั้น)
+  // รอร้านคืนเงิน → ร้านแจ้งว่าคืนเงินแล้ว → ผู้ซื้อยืนยันว่าได้รับเงินคืน
   Widget buildRefund(Map<String, dynamic> data) {
-    final bool done = data['refund_status'] == 'refunded';
+    final bool reported = data['refund_status'] == 'refunded';
+    final bool done = reported && data['refund_confirmed_at'] != null;
     final String amount = formatPrice(data['total']);
     final String note = data['refund_note']?.toString() ?? '';
 
-    final Color color = done ? AppColors.success : const Color(0xFFF79009);
+    final Color color = done
+        ? AppColors.success
+        : reported
+        ? AppColors.primary
+        : const Color(0xFFF79009);
 
     final String heading = done
         ? (isSeller
-              ? 'คืนเงิน $amount ให้ลูกค้าแล้ว'
-              : 'ร้านคืนเงิน $amount แล้ว')
+              ? 'ลูกค้าได้รับเงินคืน $amount แล้ว'
+              : 'ได้รับเงินคืน $amount แล้ว')
+        : reported
+        ? (isSeller
+              ? 'แจ้งลูกค้าแล้วว่าคืนเงิน $amount'
+              : 'ร้านแจ้งว่าคืนเงิน $amount แล้ว')
         : (isSeller
               ? 'ต้องคืนเงิน $amount ให้ลูกค้า'
               : 'รอร้านคืนเงิน $amount');
 
-    final String detail = done
+    final String detail = reported
         ? [
             if (note.isNotEmpty) note,
-            formatDateTime(data['refunded_at']),
-            if (!isSeller) 'ยังไม่ได้รับเงิน แชทกับร้านได้ด้านล่าง',
+            'ร้านแจ้งเมื่อ ${formatDateTime(data['refunded_at'])}',
+            if (done)
+              'ผู้ซื้อยืนยันเมื่อ ${formatDateTime(data['refund_confirmed_at'])}'
+            else if (isSeller)
+              'รอลูกค้ายืนยันว่าได้รับเงิน'
+            else
+              'เช็กในแอปธนาคาร ถ้าเงินเข้าแล้วกด "ได้รับเงินคืนแล้ว" ด้านล่าง '
+                  'ถ้ายังไม่ได้รับ แชทกับร้านได้',
           ].join('\n')
         : isSeller
         ? 'ลูกค้าโอนเงินมาแล้ว โอนคืนบัญชีที่ลูกค้าโอนมา (ดูได้จากสลิป) '
@@ -1296,6 +1312,19 @@ class _OrderPageState extends State<OrderPage> {
           'คืนเงินให้ลูกค้าแล้ว',
           Icons.currency_exchange_rounded,
           refundOrder,
+        ),
+      // ร้านแจ้งว่าคืนเงินแล้ว → ผู้ซื้อยืนยันเมื่อเงินเข้า
+      if (can.contains('confirm_refund'))
+        primary(
+          'ได้รับเงินคืนแล้ว',
+          Icons.savings_outlined,
+          () => confirmThen(
+            title: 'ได้รับเงินคืนแล้ว?',
+            message:
+                'เช็กในแอปธนาคารแล้วว่าได้รับ ${formatPrice(data['total'])} คืนครบ',
+            confirmLabel: 'ได้รับแล้ว',
+            onConfirm: () => act('refund-received'),
+          ),
         ),
       if (can.contains('reject_slip'))
         secondary('สลิปไม่ถูกต้อง / เงินไม่เข้า', rejectSlip),

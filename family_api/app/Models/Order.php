@@ -26,6 +26,7 @@ use RuntimeException;
 //
 // ยกเลิกได้ก่อนร้านส่ง → cancelled (คืนสต็อก)
 // ยกเลิกหลังโอนเงินแล้ว → refund_status pending ─ร้านคืนเงินแล้วกดยืนยัน─▶ refunded
+//   ─ผู้ซื้อกด "ได้รับเงินคืนแล้ว"─▶ refund_confirmed_at
 // สต็อกถูกจองตั้งแต่ตอนสั่ง จึงขายเกินจำนวนที่มีไม่ได้
 // =======================================================
 
@@ -108,6 +109,7 @@ class Order extends Model
         'refund_status',
         'refund_note',
         'refunded_at',
+        'refund_confirmed_at',
         'paid_at',
         'shipped_at',
         'completed_at',
@@ -131,6 +133,7 @@ class Order extends Model
         'completed_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'refunded_at' => 'datetime',
+        'refund_confirmed_at' => 'datetime',
     ];
 
     public function buyer()
@@ -629,7 +632,32 @@ class Order extends Model
             $this->notifyBuyer(
                 'ร้านคืนเงินให้คุณแล้ว',
                 'คำสั่งซื้อ ' . $this->code . ' คืน ' . self::baht($this->total) . ' · ' . $note
-                    . ' (ยังไม่ได้รับเงิน แชทกับร้านได้ในคำสั่งซื้อ)'
+                    . ' ได้รับเงินแล้วกด "ได้รับเงินคืนแล้ว" ในคำสั่งซื้อ (ยังไม่ได้รับ แชทกับร้านได้)'
+            );
+        }
+
+        return $done;
+    }
+
+    // ผู้ซื้อยืนยันว่าได้รับเงินคืนแล้ว (หลังร้านแจ้งว่าคืนเงิน)
+    public function confirmRefund(?Closure $allowed = null): bool
+    {
+        $done = $this->transition(
+            [self::STATUS_CANCELLED],
+            fn () => $this->refund_status === self::REFUND_DONE
+                && $this->refund_confirmed_at === null
+                && (!$allowed || $allowed($this)),
+            function () {
+                $this->forceFill(['refund_confirmed_at' => now()])->save();
+
+                $this->recordStatus(self::BY_BUYER, 'ผู้ซื้อยืนยันว่าได้รับเงินคืนแล้ว');
+            }
+        );
+
+        if ($done) {
+            $this->notifySeller(
+                'ลูกค้าได้รับเงินคืนแล้ว',
+                'คำสั่งซื้อ ' . $this->code . ' ลูกค้ายืนยันว่าได้รับเงินคืน ' . self::baht($this->total) . ' แล้ว'
             );
         }
 
@@ -826,6 +854,10 @@ class Order extends Model
                 // ยังไม่ได้จ่าย ยกเลิกได้ / โอนแล้ว ยกเลิกได้เมื่อร้านส่งช้าเกินกำหนด
                 self::STATUS_PREPARING => !$this->isTransfer() || $this->isShipOverdue() ? ['cancel'] : [],
                 self::STATUS_SHIPPED => ['received'],
+                // ร้านแจ้งว่าคืนเงินแล้ว → ผู้ซื้อยืนยันเมื่อเงินเข้า
+                self::STATUS_CANCELLED => $this->refund_status === self::REFUND_DONE && $this->refund_confirmed_at === null
+                    ? ['confirm_refund']
+                    : [],
                 default => [],
             };
         }
@@ -851,9 +883,11 @@ class Order extends Model
         }
 
         if ($this->status === self::STATUS_CANCELLED && $this->refund_status !== null) {
-            return $this->refund_status === self::REFUND_DONE
-                ? 'ยกเลิกแล้ว · คืนเงินแล้ว'
-                : 'ยกเลิกแล้ว · รอร้านคืนเงิน';
+            return match (true) {
+                $this->refund_status !== self::REFUND_DONE => 'ยกเลิกแล้ว · รอร้านคืนเงิน',
+                $this->refund_confirmed_at !== null => 'ยกเลิกแล้ว · ผู้ซื้อได้รับเงินคืนแล้ว',
+                default => 'ยกเลิกแล้ว · ร้านแจ้งว่าคืนเงินแล้ว',
+            };
         }
 
         return self::STATUS_LABELS[$this->status] ?? $this->status;
@@ -888,7 +922,7 @@ class Order extends Model
                 'recipient_name', 'recipient_phone', 'address', 'note',
                 'payment_note', 'tracking_number', 'carrier', 'seller_note',
                 'cancel_reason', 'cancelled_by',
-                'refund_status', 'refund_note', 'refunded_at',
+                'refund_status', 'refund_note', 'refunded_at', 'refund_confirmed_at',
                 'created_at', 'slip_uploaded_at', 'paid_at',
                 'shipped_at', 'completed_at', 'cancelled_at',
             ]),

@@ -651,6 +651,12 @@ Route::middleware('auth:sanctum')->group(function () {
         'cancel'
     ]);
 
+    // ผู้ซื้อยืนยันว่าได้รับเงินคืนแล้ว
+    Route::post('/orders/{order}/refund-received', [
+        OrderController::class,
+        'refundReceived'
+    ]);
+
     Route::post('/orders/{order}/refund', [
         OrderController::class,
         'refund'

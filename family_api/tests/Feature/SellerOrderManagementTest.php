@@ -198,7 +198,7 @@ class SellerOrderManagementTest extends TestCase
             ->assertOk()
             ->assertJsonPath('order.refund_status', Order::REFUND_DONE)
             ->assertJsonPath('order.refund_note', 'โอนกลับบัญชีเดิม เลขอ้างอิง 123')
-            ->assertJsonPath('order.status_label', 'ยกเลิกแล้ว · คืนเงินแล้ว')
+            ->assertJsonPath('order.status_label', 'ยกเลิกแล้ว · ร้านแจ้งว่าคืนเงินแล้ว')
             ->assertJsonPath('order.actions', []);
 
         $this->assertNotNull($order->refresh()->refunded_at);

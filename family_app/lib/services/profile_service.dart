@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -122,6 +123,28 @@ class ProfileService {
     final streamedResponse = await request.send();
 
     final response = await http.Response.fromStream(streamedResponse);
+
+    return ApiHelper.decode(response);
+  }
+
+  // รูปที่ครอปแล้ว (PNG จากหน้า PhotoCropPage)
+  static Future<Map<String, dynamic>> uploadProfilePhotoBytes(
+    Uint8List bytes,
+  ) async {
+    final headers = await _multipartHeaders();
+
+    final response = await ApiHelper.request(() async {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/profile/photo'),
+      )..headers.addAll(headers);
+
+      request.files.add(
+        http.MultipartFile.fromBytes('photo', bytes, filename: 'avatar.png'),
+      );
+
+      return http.Response.fromStream(await request.send());
+    }, timeLimit: const Duration(seconds: 60));
 
     return ApiHelper.decode(response);
   }
