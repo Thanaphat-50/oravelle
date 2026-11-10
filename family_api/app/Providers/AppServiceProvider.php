@@ -115,6 +115,13 @@ class AppServiceProvider extends ServiceProvider
                 ->response($this->tooManyAttempts(...));
         });
 
+        // ค้นหาโพสต์/ผู้ใช้: แอปรอหยุดพิมพ์ 400 มิลลิวินาทีก่อนค้น (พิมพ์ต่อเนื่องได้สบาย)
+        RateLimiter::for('search', function (Request $request) {
+            return Limit::perMinute(60)
+                ->by('search:' . ($request->user()?->id ?? $request->ip()))
+                ->response($this->tooManyAttempts(...));
+        });
+
         // แชท: คุยกันถี่กว่าโพสต์ได้
         RateLimiter::for('chat', function (Request $request) {
             return Limit::perMinute(60)

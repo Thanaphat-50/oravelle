@@ -160,4 +160,20 @@ class User extends Authenticatable implements FilamentUser
     {
         return MediaStorage::url($this->profile_photo);
     }
+
+    // มีตัวตนในชุมชน: โพสต์ชุมชน หรือความคิดเห็นในโพสต์ชุมชน ที่ไม่ถูกซ่อน
+    // → คนอื่นเปิดโปรไฟล์ชุมชนได้ / ค้นหาชื่อเจอ (คนที่ใช้แค่ในกลุ่มไม่ถูกค้นเจอจากคนนอก)
+    public function scopeWithCommunityPresence($query)
+    {
+        return $query->where(function ($users) {
+            $users->whereIn('users.id', Post::select('user_id')
+                ->where('visibility', 'community')
+                ->whereNull('hidden_at'))
+                ->orWhereIn('users.id', Comment::select('comments.user_id')
+                    ->whereNull('comments.hidden_at')
+                    ->whereHas('post', fn ($posts) => $posts
+                        ->where('visibility', 'community')
+                        ->whereNull('hidden_at')));
+        });
+    }
 }

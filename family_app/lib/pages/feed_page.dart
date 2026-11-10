@@ -7,6 +7,7 @@ import 'package:video_compress/video_compress.dart';
 
 import '../config/app_info.dart';
 import '../services/post_service.dart';
+import '../services/search_service.dart';
 import '../services/social_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/comment_media.dart';
@@ -17,6 +18,7 @@ import '../widgets/photo_viewer.dart';
 import '../widgets/post_categories.dart';
 import '../widgets/share_sheet.dart';
 import 'post_detail_page.dart';
+import 'search_page.dart';
 import 'user_profile_page.dart';
 import 'video_player_page.dart';
 
@@ -43,10 +45,18 @@ class _ScopeFeed {
   // การแบ่งหน้า (ใช้กับฟีดชุมชน)
   int page = 1;
   bool hasMore = false;
+
+  // ผลค้นหา: แบ่งหน้าแบบ cursor (ส่ง next_cursor ของหน้าก่อน)
+  String? cursor;
+
+  // โหลดหน้าถัดไปไม่สำเร็จ → รายการเดิมยังอยู่ แสดงปุ่มลองใหม่ (ไม่โหลดซ้ำเองตอนเลื่อน)
+  bool loadMoreFailed = false;
 }
 
 // ฟีดโพสต์ ใช้ได้หลายแบบ
 // - FeedScope.community: หน้าหลัก (ทุกครอบครัวเห็น)
+// - searchQuery:         ผลค้นหาโพสต์ (หน้าค้นหา) searchScope = community / family
+//                        คำค้นใหม่ → หน้าค้นหาสร้าง FeedPage ใหม่ด้วย key ใหม่ (ผลของคำเก่าถูกทิ้ง)
 // - FeedScope.family:    แท็บครอบครัว (เฉพาะครอบครัว)
 // - FeedScope.mine:      โพสต์ของฉัน (ครอบครัว + ชุมชน)
 // - hashtag:            โพสต์ชุมชนที่มี #แท็กนี้ (หน้าแฮชแท็ก)
@@ -90,6 +100,11 @@ class FeedPage extends StatefulWidget {
   // null = ทั้งหมด — เปลี่ยนค่า → โหลดใหม่ตั้งแต่หน้าแรก (เซิร์ฟเวอร์กรองทุกหน้า)
   final String? mineVisibility;
 
+  // หน้าค้นหา: ผลค้นหาโพสต์ด้วยคำนี้ (แตะการ์ดเพื่อเปิดโพสต์)
+  // searchScope: community = ชุมชน / family = ในกลุ่มที่อยู่ตอนนี้
+  final String? searchQuery;
+  final String searchScope;
+
   const FeedPage({
     super.key,
     required this.scope,
@@ -104,6 +119,8 @@ class FeedPage extends StatefulWidget {
     this.category,
     this.onCategoryChanged,
     this.mineVisibility,
+    this.searchQuery,
+    this.searchScope = 'community',
   });
 
   @override
@@ -181,17 +198,20 @@ class _FeedPageState extends State<FeedPage> {
 
   bool get isHashtagFeed => widget.hashtag != null;
 
+  bool get isSearchFeed => widget.searchQuery != null;
+
   // ฟีดหลักที่เขียนโพสต์ได้ (ชุมชน / ครอบครัว)
   bool get isMainFeed =>
       !isSinglePost &&
       !isAuthorFeed &&
       !isHashtagFeed &&
+      !isSearchFeed &&
       scope != FeedScope.mine;
 
   // ฟีดที่โหลดทีละหน้า
   bool get isPaged =>
       !isSinglePost &&
-      (scope == FeedScope.community || scope == FeedScope.mine);
+      (isSearchFeed || scope == FeedScope.community || scope == FeedScope.mine);
 
   final _ScopeFeed feed = _ScopeFeed();
 
@@ -279,9 +299,10 @@ class _FeedPageState extends State<FeedPage> {
   // =====================================================
   // โหลดโพสต์
   // loadMore = true → โหลดหน้าถัดไปต่อท้าย (ฟีดชุมชน)
+  // retry = true → กดลองใหม่หลังโหลดหน้าถัดไปไม่สำเร็จ
   // =====================================================
 
-  Future<void> loadPosts({bool loadMore = false}) async {
+  Future<void> loadPosts({bool loadMore = false, bool retry = false}) async {
     if (isSinglePost) {
       if (!loadMore) await loadSinglePost();
       return;
@@ -294,8 +315,12 @@ class _FeedPageState extends State<FeedPage> {
         return;
       }
 
+      // ล้มเหลวแล้ว → รอผู้ใช้กดลองใหม่ (ไม่ยิงซ้ำทุกครั้งที่เลื่อน)
+      if (state.loadMoreFailed && !retry) return;
+
       setState(() {
         state.isLoadingMore = true;
+        state.loadMoreFailed = false;
       });
     }
 
@@ -304,16 +329,24 @@ class _FeedPageState extends State<FeedPage> {
     final int generation = feedGeneration;
 
     try {
-      final result = await PostService.getPosts(
-        scope: isAuthorFeed ? 'user' : apiScope(scope),
-        page: page,
-        category: isMainFeed ? filterCategory : null,
-        userId: widget.authorId,
-        sort: forYou ? 'for_you' : null,
-        media: videosOnly ? 'video' : null,
-        hashtag: widget.hashtag,
-        visibility: scope == FeedScope.mine ? widget.mineVisibility : null,
-      );
+      final result = isSearchFeed
+          ? await SearchService.posts(
+              query: widget.searchQuery!,
+              scope: widget.searchScope,
+              cursor: loadMore ? state.cursor : null,
+            )
+          : await PostService.getPosts(
+              scope: isAuthorFeed ? 'user' : apiScope(scope),
+              page: page,
+              category: isMainFeed ? filterCategory : null,
+              userId: widget.authorId,
+              sort: forYou ? 'for_you' : null,
+              media: videosOnly ? 'video' : null,
+              hashtag: widget.hashtag,
+              visibility: scope == FeedScope.mine
+                  ? widget.mineVisibility
+                  : null,
+            );
 
       if (!mounted || generation != feedGeneration) return;
 
@@ -341,16 +374,22 @@ class _FeedPageState extends State<FeedPage> {
 
           state.page = page;
           state.hasMore = result['has_more'] == true;
+          state.cursor = result['next_cursor']?.toString();
+          state.loadMoreFailed = false;
           state.loaded = true;
           state.loadError = null;
 
           applyCurrentUser(result['current_user'] ?? result['user']);
         });
       } else {
+        if (loadMore) state.loadMoreFailed = true;
+
         handleLoadError(result['message']?.toString() ?? 'โหลดโพสต์ไม่สำเร็จ');
       }
     } catch (e) {
       if (!mounted || generation != feedGeneration) return;
+
+      if (loadMore) state.loadMoreFailed = true;
 
       handleLoadError(e.toString());
     } finally {
@@ -368,11 +407,7 @@ class _FeedPageState extends State<FeedPage> {
     final bool? go = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        icon: Icon(
-          Icons.groups_rounded,
-          color: AppColors.primary,
-          size: 34,
-        ),
+        icon: Icon(Icons.groups_rounded, color: AppColors.primary, size: 34),
         title: const Text('ต้องมีกลุ่มก่อน'),
         content: const Text(
           'สร้างกลุ่มใหม่ หรือเข้าร่วมด้วยรหัสเชิญ/คำเชิญ '
@@ -567,7 +602,8 @@ class _FeedPageState extends State<FeedPage> {
           }
 
           // แชร์แล้วเห็นทันทีในฟีดที่เปิดอยู่
-          final bool showHere = newPost is Map &&
+          final bool showHere =
+              newPost is Map &&
               isMainFeed &&
               ((channel == 'family' && scope == FeedScope.family) ||
                   (channel == 'community' &&
@@ -665,6 +701,7 @@ class _FeedPageState extends State<FeedPage> {
       feed.posts = [];
       feed.isLoading = true;
       feed.isLoadingMore = false;
+      feed.loadMoreFailed = false;
       feed.loadError = null;
       feed.hasMore = false;
 
@@ -685,6 +722,7 @@ class _FeedPageState extends State<FeedPage> {
       feed.posts = [];
       feed.isLoading = true;
       feed.isLoadingMore = false;
+      feed.loadMoreFailed = false;
       feed.loadError = null;
       feed.hasMore = false;
 
@@ -1072,7 +1110,10 @@ class _FeedPageState extends State<FeedPage> {
       File? thumbnail;
 
       try {
-        thumbnail = await VideoCompress.getFileThumbnail(file.path, quality: 70);
+        thumbnail = await VideoCompress.getFileThumbnail(
+          file.path,
+          quality: 70,
+        );
       } catch (_) {
         // ไม่มีรูปตัวอย่างก็โพสต์ได้
       }
@@ -1717,7 +1758,6 @@ class _FeedPageState extends State<FeedPage> {
     return AppDecorations.card(radius: 24);
   }
 
-
   // =====================================================
   // Avatar
   // =====================================================
@@ -2026,7 +2066,8 @@ class _FeedPageState extends State<FeedPage> {
         // แท็กยอดนิยมที่ยังไม่ได้ใส่ (พิมพ์อยู่ → เฉพาะที่ขึ้นต้นตรงกัน)
         final List<String> suggestions = (popularHashtags ?? const <String>[])
             .where(
-              (tag) => !composeHashtags.any((item) => item.toLowerCase() == tag),
+              (tag) =>
+                  !composeHashtags.any((item) => item.toLowerCase() == tag),
             )
             .where((tag) => typed.isEmpty || tag.startsWith(typed))
             .take(8)
@@ -2111,9 +2152,7 @@ class _FeedPageState extends State<FeedPage> {
                         side: BorderSide(
                           color: communityColor.withValues(alpha: 0.25),
                         ),
-                        backgroundColor: communityColor.withValues(
-                          alpha: 0.06,
-                        ),
+                        backgroundColor: communityColor.withValues(alpha: 0.06),
                         visualDensity: VisualDensity.compact,
                       ),
                       const SizedBox(width: 6),
@@ -2209,10 +2248,7 @@ class _FeedPageState extends State<FeedPage> {
 
                       return Text(
                         '$currentLength/$maxPostLength',
-                        style: TextStyle(
-                          color: AppColors.muted,
-                          fontSize: 11,
-                        ),
+                        style: TextStyle(color: AppColors.muted, fontSize: 11),
                       );
                     },
 
@@ -2998,6 +3034,16 @@ class _FeedPageState extends State<FeedPage> {
           ),
         ),
         const Spacer(),
+        // ค้นหาเฉพาะโพสต์ในกลุ่ม (แยกจากค้นหาชุมชน)
+        IconButton(
+          tooltip: 'ค้นหาในกลุ่ม',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const SearchPage(area: SearchArea.family),
+            ),
+          ),
+          icon: Icon(Icons.search_rounded, color: AppColors.primary),
+        ),
         if (!feed.isLoading && feed.posts.isNotEmpty)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -3227,9 +3273,7 @@ class _FeedPageState extends State<FeedPage> {
               ],
               if (original['video'] is Map) ...[
                 const SizedBox(height: 10),
-                buildVideo(
-                  Map<String, dynamic>.from(original['video'] as Map),
-                ),
+                buildVideo(Map<String, dynamic>.from(original['video'] as Map)),
               ],
               if (images.isNotEmpty) ...[
                 const SizedBox(height: 10),
@@ -3291,6 +3335,20 @@ class _FeedPageState extends State<FeedPage> {
   // Post Card
   // =====================================================
 
+  // หน้าค้นหา: แตะการ์ด → เปิดโพสต์ (ตรวจสิทธิ์ใหม่ตอนเปิด) / ฟีดอื่นไม่เปลี่ยน
+  Widget openPostOnTap(int? postId, Widget card) {
+    if (!isSearchFeed || postId == null) return card;
+
+    return GestureDetector(
+      key: ValueKey('search-post-$postId'),
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => PostDetailPage(postId: postId))),
+      child: card,
+    );
+  }
+
   Widget buildPostCard(Map<String, dynamic> post) {
     final dynamic user = post['user'];
 
@@ -3316,226 +3374,228 @@ class _FeedPageState extends State<FeedPage> {
 
     final List<String> imageUrls = imageUrlsOf(post);
 
-    return AnimatedOpacity(
-      key: ValueKey('post-$postId'),
-      duration: const Duration(milliseconds: 200),
-      opacity: deleting ? 0.45 : 1,
-      child: IgnorePointer(
-        ignoring: deleting,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 14),
-          decoration: cardDecoration(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ===========================================
-              // Header
-              // ===========================================
+    return openPostOnTap(
+      postId,
+      AnimatedOpacity(
+        key: ValueKey('post-$postId'),
+        duration: const Duration(milliseconds: 200),
+        opacity: deleting ? 0.45 : 1,
+        child: IgnorePointer(
+          ignoring: deleting,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            decoration: cardDecoration(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ===========================================
+                // Header
+                // ===========================================
 
-              if (post['is_hidden'] == true) buildHiddenNotice(),
+                if (post['is_hidden'] == true) buildHiddenNotice(),
 
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 4, 0),
-                child: Row(
-                  children: [
-                    buildProfileLink(
-                      userId: authorIdOf(post),
-                      name: name,
-                      child: buildAvatar(
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 4, 0),
+                  child: Row(
+                    children: [
+                      buildProfileLink(
+                        userId: authorIdOf(post),
                         name: name,
-                        imageUrl: getProfileImage(user),
-                        radius: 21,
+                        child: buildAvatar(
+                          name: name,
+                          imageUrl: getProfileImage(user),
+                          radius: 21,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: buildProfileLink(
-                                  userId: authorIdOf(post),
-                                  name: name,
-                                  child: Text(
-                                    name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: AppColors.navy,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w800,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: buildProfileLink(
+                                    userId: authorIdOf(post),
+                                    name: name,
+                                    child: Text(
+                                      name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: AppColors.navy,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800,
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              if (mine) ...[
-                                const SizedBox(width: 6),
-                                buildYouBadge(),
+                                if (mine) ...[
+                                  const SizedBox(width: 6),
+                                  buildYouBadge(),
+                                ],
                               ],
-                            ],
-                          ),
-                          const SizedBox(height: 3),
-                          Row(
-                            children: [
-                              // โพสต์ชุมชน: ป้ายหมวด / โพสต์ครอบครัว: ไอคอนบ้าน
-                              if (category != null) ...[
-                                CategoryBadge(category: category),
-                                const SizedBox(width: 6),
-                              ] else ...[
-                                Icon(
-                                  community
-                                      ? Icons.public_rounded
-                                      : Icons.groups_rounded,
-                                  size: 13,
-                                  color: AppColors.muted,
-                                ),
-                                const SizedBox(width: 4),
-                              ],
-                              Flexible(
-                                child: Text(
-                                  category != null
-                                      ? formatDate(post['created_at'])
-                                      : '${community ? 'ชุมชน' : 'กลุ่ม'} · '
-                                            '${formatDate(post['created_at'])}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
+                            ),
+                            const SizedBox(height: 3),
+                            Row(
+                              children: [
+                                // โพสต์ชุมชน: ป้ายหมวด / โพสต์ครอบครัว: ไอคอนบ้าน
+                                if (category != null) ...[
+                                  CategoryBadge(category: category),
+                                  const SizedBox(width: 6),
+                                ] else ...[
+                                  Icon(
+                                    community
+                                        ? Icons.public_rounded
+                                        : Icons.groups_rounded,
+                                    size: 13,
                                     color: AppColors.muted,
-                                    fontSize: 11.5,
+                                  ),
+                                  const SizedBox(width: 4),
+                                ],
+                                Flexible(
+                                  child: Text(
+                                    category != null
+                                        ? formatDate(post['created_at'])
+                                        : '${community ? 'ชุมชน' : 'กลุ่ม'} · '
+                                              '${formatDate(post['created_at'])}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: AppColors.muted,
+                                      fontSize: 11.5,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              if (!community && post['on_map'] == true) ...[
-                                const SizedBox(width: 6),
-                                buildOnMapBadge(),
+                                if (!community && post['on_map'] == true) ...[
+                                  const SizedBox(width: 6),
+                                  buildOnMapBadge(),
+                                ],
                               ],
-                            ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (deleting)
+                        const Padding(
+                          padding: EdgeInsets.all(15),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           ),
-                        ],
+                        )
+                      else if (postId != null && (mine || community))
+                        buildPostMenu(post, postId, mine)
+                      else
+                        const SizedBox(width: 12, height: 48),
+                    ],
+                  ),
+                ),
+
+                // ===========================================
+                // Content (โพสต์ที่มีแต่รูปไม่แสดงช่องข้อความ)
+                // ===========================================
+                if (content.isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      10,
+                      16,
+                      imageUrls.isEmpty ? 14 : 10,
+                    ),
+                    child: HashtagText(
+                      content,
+                      onTagTap: openHashtag,
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 15.5,
+                        height: 1.55,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                    if (deleting)
-                      const Padding(
-                        padding: EdgeInsets.all(15),
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    else if (postId != null && (mine || community))
-                      buildPostMenu(post, postId, mine)
-                    else
-                      const SizedBox(width: 12, height: 48),
-                  ],
-                ),
-              ),
-
-              // ===========================================
-              // Content (โพสต์ที่มีแต่รูปไม่แสดงช่องข้อความ)
-              // ===========================================
-              if (content.isNotEmpty)
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    10,
-                    16,
-                    imageUrls.isEmpty ? 14 : 10,
                   ),
-                  child: HashtagText(
-                    content,
-                    onTagTap: openHashtag,
-                    style: TextStyle(
-                      color: AppColors.navy,
-                      fontSize: 15.5,
-                      height: 1.55,
-                      fontWeight: FontWeight.w500,
+
+                // ===========================================
+                // โพสต์ที่แชร์ต่อมา (โพสต์ต้นฉบับย่อ)
+                // ===========================================
+                if (post['shared_post_id'] != null)
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      content.isEmpty ? 10 : 0,
+                      16,
+                      14,
+                    ),
+                    child: buildSharedPost(post),
+                  ),
+
+                // ===========================================
+                // Images
+                // ===========================================
+                if (imageUrls.isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      content.isEmpty ? 10 : 0,
+                      16,
+                      14,
+                    ),
+                    child: buildImageGrid(imageUrls),
+                  ),
+
+                // ===========================================
+                // Video
+                // ===========================================
+                if (post['video'] is Map)
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      content.isEmpty ? 10 : 0,
+                      16,
+                      14,
+                    ),
+                    child: buildVideo(
+                      Map<String, dynamic>.from(post['video'] as Map),
                     ),
                   ),
-                ),
 
-              // ===========================================
-              // โพสต์ที่แชร์ต่อมา (โพสต์ต้นฉบับย่อ)
-              // ===========================================
-              if (post['shared_post_id'] != null)
+                // ===========================================
+                // Action Bar
+                // ===========================================
+                // Wrap: ตัวอักษรใหญ่/จอเล็ก → ปุ่มขึ้นบรรทัดใหม่แทนล้นจอ
                 Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    content.isEmpty ? 10 : 0,
-                    16,
-                    14,
-                  ),
-                  child: buildSharedPost(post),
-                ),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 12, 12),
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      if (postId != null) buildLikeButton(post, postId),
 
-              // ===========================================
-              // Images
-              // ===========================================
-              if (imageUrls.isNotEmpty)
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    content.isEmpty ? 10 : 0,
-                    16,
-                    14,
-                  ),
-                  child: buildImageGrid(imageUrls),
-                ),
+                      // ปุ่มความคิดเห็น: ยังไม่มี = ชวนเขียน / มีแล้ว = จำนวน
+                      if (postId != null)
+                        buildCommentButton(postId, comments.length),
 
-              // ===========================================
-              // Video
-              // ===========================================
-              if (post['video'] is Map)
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    content.isEmpty ? 10 : 0,
-                    16,
-                    14,
-                  ),
-                  child: buildVideo(
-                    Map<String, dynamic>.from(post['video'] as Map),
-                  ),
-                ),
-
-              // ===========================================
-              // Action Bar
-              // ===========================================
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 12, 12),
-                child: Row(
-                  children: [
-                    if (postId != null) ...[
-                      buildLikeButton(post, postId),
-                      const SizedBox(width: 10),
+                      // แชร์ได้เฉพาะโพสต์ชุมชน (หรือโพสต์ที่แชร์ต่อมาจากชุมชน)
+                      if (postId != null &&
+                          (community || post['shared_post'] is Map))
+                        buildShareButton(post, postId),
                     ],
-
-                    // ปุ่มความคิดเห็น: ยังไม่มี = ชวนเขียน / มีแล้ว = จำนวน
-                    if (postId != null)
-                      buildCommentButton(postId, comments.length),
-
-                    // แชร์ได้เฉพาะโพสต์ชุมชน (หรือโพสต์ที่แชร์ต่อมาจากชุมชน)
-                    if (postId != null &&
-                        (community || post['shared_post'] is Map)) ...[
-                      const SizedBox(width: 10),
-                      buildShareButton(post, postId),
-                    ],
-                  ],
+                  ),
                 ),
-              ),
 
-              // ===========================================
-              // Comments
-              // ===========================================
-              if (comments.isNotEmpty)
-                buildCommentsSection(
-                  postId: postId,
-                  comments: comments,
-                  community: community,
-                ),
-            ],
+                // ===========================================
+                // Comments
+                // ===========================================
+                if (comments.isNotEmpty)
+                  buildCommentsSection(
+                    postId: postId,
+                    comments: comments,
+                    community: community,
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -3658,9 +3718,7 @@ class _FeedPageState extends State<FeedPage> {
       toggled: liked,
       label: liked ? 'ยกเลิกถูกใจ' : 'ถูกใจ',
       child: Material(
-        color: liked
-            ? likeColor.withValues(alpha: 0.10)
-            : AppColors.fill,
+        color: liked ? likeColor.withValues(alpha: 0.10) : AppColors.fill,
         borderRadius: BorderRadius.circular(999),
         child: InkWell(
           borderRadius: BorderRadius.circular(999),
@@ -3844,12 +3902,17 @@ class _FeedPageState extends State<FeedPage> {
                 size: 18,
               ),
               const SizedBox(width: 7),
-              Text(
-                count > 0 ? '$count' : 'ความคิดเห็น',
-                style: TextStyle(
-                  color: AppColors.muted,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
+              // ตัวอักษรใหญ่มาก → ตัดท้ายแทนล้นปุ่ม
+              Flexible(
+                child: Text(
+                  count > 0 ? '$count' : 'ความคิดเห็น',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
@@ -3863,19 +3926,13 @@ class _FeedPageState extends State<FeedPage> {
   Widget buildCommentPrompt(int postId) {
     final dynamic me = currentUser;
 
-    final String myName = me is Map
-        ? (me['name']?.toString() ?? 'คุณ')
-        : 'คุณ';
+    final String myName = me is Map ? (me['name']?.toString() ?? 'คุณ') : 'คุณ';
 
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Row(
         children: [
-          buildAvatar(
-            name: myName,
-            imageUrl: getProfileImage(me),
-            radius: 15,
-          ),
+          buildAvatar(name: myName, imageUrl: getProfileImage(me), radius: 15),
           const SizedBox(width: 9),
           Expanded(
             child: Material(
@@ -4165,6 +4222,19 @@ class _FeedPageState extends State<FeedPage> {
       };
     }
 
+    if (isSearchFeed) {
+      final bool inGroup = widget.searchScope == 'family';
+
+      return buildStateCard(
+        icon: Icons.search_off_rounded,
+        color: inGroup ? AppColors.primary : communityColor,
+        title: 'ไม่พบโพสต์สำหรับคำว่า “${widget.searchQuery}”',
+        message: inGroup
+            ? 'ลองใช้คำอื่น หรือคำที่สั้นลง (ค้นเฉพาะโพสต์ในกลุ่มของคุณ)'
+            : 'ลองใช้คำอื่น หรือคำที่สั้นลง',
+      );
+    }
+
     final PostCategory? filter = findPostCategory(filterCategory);
 
     if (isHashtagFeed) {
@@ -4217,7 +4287,7 @@ class _FeedPageState extends State<FeedPage> {
     return buildStateCard(
       icon: Icons.cloud_off_rounded,
       color: AppColors.danger,
-      title: 'โหลดโพสต์ไม่สำเร็จ',
+      title: isSearchFeed ? 'ค้นหาไม่สำเร็จ' : 'โหลดโพสต์ไม่สำเร็จ',
       message: feed.loadError ?? 'กรุณาลองใหม่อีกครั้ง',
       action: OutlinedButton.icon(
         style: OutlinedButton.styleFrom(minimumSize: const Size(170, 46)),
@@ -4310,6 +4380,26 @@ class _FeedPageState extends State<FeedPage> {
       );
     }
 
+    if (feed.loadMoreFailed) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          children: [
+            Text(
+              'โหลดเพิ่มไม่สำเร็จ',
+              style: TextStyle(color: AppColors.muted, fontSize: 12),
+            ),
+            const SizedBox(height: 6),
+            OutlinedButton.icon(
+              onPressed: () => loadPosts(loadMore: true, retry: true),
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('ลองอีกครั้ง'),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (feed.hasMore) {
       return const SizedBox(height: 40);
     }
@@ -4318,7 +4408,7 @@ class _FeedPageState extends State<FeedPage> {
       padding: EdgeInsets.symmetric(vertical: 14),
       child: Center(
         child: Text(
-          'ไม่มีโพสต์เพิ่มแล้ว',
+          isSearchFeed ? 'ไม่มีผลค้นหาเพิ่มแล้ว' : 'ไม่มีโพสต์เพิ่มแล้ว',
           style: TextStyle(color: AppColors.muted, fontSize: 12),
         ),
       ),

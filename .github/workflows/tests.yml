@@ -99,6 +99,17 @@ jobs:
         # --fail-on-skipped: ถ้าทดสอบถูกข้าม (ตั้งค่าฐานข้อมูลไม่ครบ) ให้งานนี้ล้ม ไม่ผ่านแบบเงียบ ๆ
         run: php artisan test --filter=OrderConcurrencyTest --fail-on-skipped
 
+      # ค้นหาโพสต์/ผู้ใช้บน MySQL จริง (LIKE + ESCAPE, ภาษาไทย, ตัวพิมพ์เล็ก/ใหญ่, collation, cursor)
+      - name: Run search tests (MySQL)
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: '3306'
+          DB_DATABASE: oravelle_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: php artisan test --filter=SearchTest --fail-on-skipped
+
   flutter:
     name: Flutter analyze
     runs-on: ubuntu-latest

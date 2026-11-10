@@ -272,24 +272,10 @@ class CommunityController extends Controller
 
     // เคยโพสต์หรือแสดงความคิดเห็นในชุมชน (ที่ไม่ถูกซ่อน)
     // คนที่ไม่เคยอยู่ในชุมชน → คนนอกครอบครัวเปิดดูโปรไฟล์จาก id ไม่ได้
+    // กติกาเดียวกับการค้นหาผู้ใช้ (User::scopeWithCommunityPresence)
     private function hasCommunityActivity(User $user): bool
     {
-        $postedInCommunity = Post::where('user_id', $user->id)
-            ->where('visibility', 'community')
-            ->whereNull('hidden_at')
-            ->exists();
-
-        if ($postedInCommunity) {
-            return true;
-        }
-
-        return Comment::where('user_id', $user->id)
-            ->whereNull('hidden_at')
-            ->whereHas('post', function ($posts) {
-                $posts->where('visibility', 'community')
-                    ->whereNull('hidden_at');
-            })
-            ->exists();
+        return User::whereKey($user->id)->withCommunityPresence()->exists();
     }
 
     private function profileNotFound()

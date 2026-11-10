@@ -49,6 +49,7 @@ import 'video_feed_page.dart';
 import 'support_center_page.dart';
 import 'support_ticket_page.dart';
 import 'activity_detail_page.dart';
+import 'search_page.dart';
 
 // หน้าย่อยของแท็บ "หน้าหลัก"
 
@@ -1968,6 +1969,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             icon: const Icon(Icons.storefront_outlined, size: 26),
           ),
         ],
+
+        // ค้นหาโพสต์และผู้ใช้ในชุมชน (หน้าหลัก)
+        if (selectedIndex == tabHome)
+          IconButton(
+            tooltip: 'ค้นหา',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SearchPage()),
+            ),
+            icon: const Icon(Icons.search_rounded, size: 26),
+          ),
 
         // แชทใช้ได้เมื่อมีครอบครัวแล้ว
         // แชทกับคนในกลุ่ม และกับร้านที่ทักไว้ (ไม่มีกลุ่มก็คุยกับร้านได้)

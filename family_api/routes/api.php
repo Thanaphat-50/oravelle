@@ -25,6 +25,7 @@ use App\Http\Controllers\MyPromotionController;
 use App\Http\Controllers\ShopReviewController;
 use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SocialAuthController;
 use App\Http\Controllers\NotificationController;
@@ -194,6 +195,12 @@ Route::middleware('auth:sanctum')->group(function () {
         PostController::class,
         'share'
     ])->middleware('throttle:ugc');
+
+    // ค้นหาโพสต์ (ชุมชน / ในกลุ่ม) และผู้ใช้ (SearchController)
+    Route::middleware('throttle:search')->group(function () {
+        Route::get('/search/posts', [SearchController::class, 'posts']);
+        Route::get('/search/users', [SearchController::class, 'users']);
+    });
 
     // ติดตามผู้ใช้อื่น
     Route::get('/users/suggestions', [
