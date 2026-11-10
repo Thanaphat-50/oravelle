@@ -48,6 +48,7 @@ import 'user_profile_page.dart';
 import 'video_feed_page.dart';
 import 'support_center_page.dart';
 import 'support_ticket_page.dart';
+import 'activity_detail_page.dart';
 
 // หน้าย่อยของแท็บ "หน้าหลัก"
 
@@ -478,6 +479,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         if (orderId != null) {
           await navigator.push(
             MaterialPageRoute(builder: (_) => OrderPage(orderId: orderId)),
+          );
+          return;
+        }
+
+      // เตือนกิจกรรม → หน้ารายละเอียด (เซิร์ฟเวอร์ตรวจสิทธิ์ / ถูกลบ → ข้อความแจ้ง)
+      case 'activity_reminder':
+        final int? activityId = int.tryParse('${data['activity_id'] ?? ''}');
+
+        if (activityId != null) {
+          await navigator.push(
+            MaterialPageRoute(
+              builder: (_) => ActivityDetailPage(activityId: activityId),
+            ),
           );
           return;
         }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:http/http.dart' as http;
 
 import 'api_helper.dart';
@@ -21,6 +22,52 @@ class ActivityService {
       'Content-Type': 'application/json',
 
       if (token != null) 'Authorization': 'Bearer $token',
+    };
+  }
+
+  // =====================================================
+  // เวลา: starts_at (UTC) + เขตเวลา IANA ของเครื่อง
+  // activity_date (นาฬิกาเครื่อง) ส่งต่อไว้ให้เซิร์ฟเวอร์/แอปเวอร์ชันเก่า
+  // =====================================================
+
+  // ทดสอบ: กำหนดเขตเวลาเอง (ไม่เรียกเครื่อง)
+  static String? timezoneOverride;
+
+  // เขตเวลาของเครื่อง เช่น Asia/Bangkok
+  // อ่านไม่ได้ → ใช้ส่วนต่างเวลาเต็มชั่วโมง (Etc/GMT-7 = UTC+7) / ไม่ลงตัว → null (ไม่ส่งเวลาจริง ไม่เดา)
+  static Future<String?> deviceTimezone() async {
+    if (timezoneOverride != null) return timezoneOverride;
+
+    try {
+      // เครื่องตอบช้า/ไม่ตอบ → ไม่ค้างการบันทึก
+      final TimezoneInfo info = await FlutterTimezone.getLocalTimezone()
+          .timeout(const Duration(seconds: 2));
+
+      if (info.identifier.isNotEmpty) return info.identifier;
+    } catch (_) {}
+
+    final Duration offset = DateTime.now().timeZoneOffset;
+
+    if (offset.inMinutes % 60 != 0) return null;
+
+    final int hours = offset.inHours;
+
+    if (hours == 0) return 'UTC';
+
+    return 'Etc/GMT${hours > 0 ? '-' : '+'}${hours.abs()}';
+  }
+
+  static Future<Map<String, dynamic>> _timeFields(DateTime? when) async {
+    if (when == null) {
+      return {'activity_date': null, 'starts_at': null, 'timezone': null};
+    }
+
+    final String? timezone = await deviceTimezone();
+
+    return {
+      'activity_date': when.toIso8601String(),
+      if (timezone != null) 'starts_at': when.toUtc().toIso8601String(),
+      'timezone': ?timezone,
     };
   }
 
@@ -60,8 +107,10 @@ class ActivityService {
     String? description,
     DateTime? activityDate,
     String visibility = 'private',
+    int? reminderOffset,
   }) async {
     final headers = await _headers();
+    final time = await _timeFields(activityDate);
 
     final response = await ApiHelper.request(
       () => http.post(
@@ -74,9 +123,12 @@ class ActivityService {
 
           'description': description,
 
-          'activity_date': activityDate?.toIso8601String(),
+          ...time,
 
           'visibility': visibility,
+
+          // ค่าเริ่มต้น = ไม่เตือน (ไม่ส่ง)
+          'reminder_offset': ?reminderOffset,
         }),
       ),
     );
@@ -86,7 +138,8 @@ class ActivityService {
 
   // =====================================================
   // แก้ไขชื่อ / รายละเอียด / วันเวลา (activityDate null = ล้างวันเวลา)
-  // วันเวลาส่งตามนาฬิกาเครื่อง (ไม่มีเขตเวลา) เหมือนตอนสร้าง
+  // วันเวลา: ช่วงเวลาจริง + เขตเวลาเครื่อง เหมือนตอนสร้าง
+  // changeReminder: ส่งการเตือนของตัวเองไปด้วย (reminderOffset null = ไม่เตือน)
   // =====================================================
 
   static Future<Map<String, dynamic>> updateActivity({
@@ -94,8 +147,11 @@ class ActivityService {
     required String title,
     String? description,
     DateTime? activityDate,
+    bool changeReminder = false,
+    int? reminderOffset,
   }) async {
     final headers = await _headers();
+    final time = await _timeFields(activityDate);
 
     final response = await ApiHelper.request(
       () => http.patch(
@@ -104,8 +160,44 @@ class ActivityService {
         body: jsonEncode({
           'title': title,
           'description': description,
-          'activity_date': activityDate?.toIso8601String(),
+          ...time,
+          if (changeReminder) 'reminder_offset': reminderOffset,
         }),
+      ),
+    );
+
+    return ApiHelper.decode(response);
+  }
+
+  // =====================================================
+  // รายละเอียด (เปิดจากแจ้งเตือน) / ตั้งเตือนของตัวเอง
+  // =====================================================
+
+  static Future<Map<String, dynamic>> getActivity(int activityId) async {
+    final headers = await _headers();
+
+    final response = await ApiHelper.request(
+      () => http.get(
+        Uri.parse('$baseUrl/activities/$activityId'),
+        headers: headers,
+      ),
+    );
+
+    return ApiHelper.decode(response);
+  }
+
+  // offset: null = ไม่เตือน / 0 / 15 / 30 / 1440 นาที
+  static Future<Map<String, dynamic>> setReminder({
+    required int activityId,
+    required int? offset,
+  }) async {
+    final headers = await _headers();
+
+    final response = await ApiHelper.request(
+      () => http.put(
+        Uri.parse('$baseUrl/activities/$activityId/reminder'),
+        headers: headers,
+        body: jsonEncode({'offset': offset}),
       ),
     );
 

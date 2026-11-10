@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../services/activity_service.dart';
 import '../services/api_helper.dart';
 import '../theme/app_theme.dart';
+import '../widgets/activity_reminder_widgets.dart';
+import 'activity_detail_page.dart';
 
 class ActivityPage extends StatefulWidget {
   const ActivityPage({super.key});
@@ -311,11 +313,26 @@ class _ActivityPageState extends State<ActivityPage> {
 
     String selectedVisibility = draft?['visibility']?.toString() ?? 'private';
 
+    // เวลาตามนาฬิกาเครื่องนี้ (กิจกรรมใหม่: จาก starts_at / กิจกรรมเดิม: activity_date)
+    final DateTime? initialDateTime = ActivityReminders.startOf(editing);
+
     DateTime? selectedDateTime = draft != null
         ? draft['activity_date'] as DateTime?
-        : parseDate(editing?['activity_date']);
+        : initialDateTime;
 
     final bool isEdit = editing != null;
+
+    // การเตือนของตัวเอง (ค่าเริ่มต้น ไม่เตือน)
+    final int? initialReminder = ActivityReminders.offsetOf(editing);
+
+    int? reminderOffset = draft != null
+        ? draft['reminder_offset'] as int?
+        : initialReminder;
+
+    final bool editingCompleted = editing?['is_completed'] == true;
+
+    // กิจกรรมเดิมก่อนมีระบบเตือน: บันทึกฟอร์มนี้ = ยืนยันวันเวลา (ใช้เขตเวลาของเครื่องนี้)
+    final bool needsConfirmation = editing?['needs_time_confirmation'] == true;
 
     final titleController = TextEditingController(text: title);
     final descriptionController = TextEditingController(text: description);
@@ -749,12 +766,72 @@ class _ActivityPageState extends State<ActivityPage> {
                             onPressed: () {
                               setSheetState(() {
                                 selectedDateTime = null;
+
+                                // ไม่มีวันเวลา → ตั้งเตือนไม่ได้
+                                reminderOffset = null;
                               });
                             },
 
                             child: const Text('ล้างวันและเวลา'),
                           ),
                         ),
+
+                      // =================================
+                      // REMINDER (ของตัวเอง)
+                      // =================================
+                      const SizedBox(height: 14),
+
+                      Text(
+                        'แจ้งเตือนล่วงหน้า',
+                        style: TextStyle(
+                          color: AppColors.navy,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      if (isEdit && needsConfirmation) ...[
+                        Container(
+                          padding: const EdgeInsets.all(11),
+                          decoration: BoxDecoration(
+                            color: AppColors.warm.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(
+                            'กิจกรรมนี้สร้างก่อนมีระบบเตือน ตรวจวันเวลาให้ถูกต้อง '
+                            'แล้วกดบันทึกเพื่อยืนยัน (ใช้เขตเวลาของเครื่องนี้) จึงจะตั้งเตือนได้',
+                            style: TextStyle(
+                              color: AppColors.navy,
+                              fontSize: 11,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 8),
+                      ],
+
+                      ReminderPicker(
+                        start: selectedDateTime,
+                        selected: reminderOffset,
+                        // ค่าเดิม + เวลาเดิม → แสดงสถานะ (ส่งแล้ว / เลยเวลา) แทนคำเตือน
+                        savedStatus:
+                            reminderOffset == initialReminder &&
+                                selectedDateTime?.toString().substring(0, 16) ==
+                                    initialDateTime?.toString().substring(0, 16)
+                            ? ActivityReminders.statusOf(editing)
+                            : null,
+                        blockedReason: editingCompleted
+                            ? 'กิจกรรมนี้ทำเสร็จแล้ว จึงไม่มีการเตือน'
+                            : null,
+                        onChanged: (value) {
+                          setSheetState(() {
+                            reminderOffset = value;
+                          });
+                        },
+                      ),
 
                       const SizedBox(height: 23),
 
@@ -775,6 +852,32 @@ class _ActivityPageState extends State<ActivityPage> {
                             return;
                           }
 
+                          final DateTime? when = selectedDateTime;
+                          final int? offset = reminderOffset;
+
+                          final bool timeChanged =
+                              when?.toString().substring(0, 16) !=
+                              initialDateTime?.toString().substring(0, 16);
+
+                          final bool reminderChanged =
+                              offset != initialReminder;
+
+                          // เวลาเตือนผ่านไปแล้ว → ให้เลือกใหม่ (ไม่บันทึกแบบเงียบ ๆ)
+                          if (when != null &&
+                              offset != null &&
+                              (!isEdit || timeChanged || reminderChanged) &&
+                              ActivityReminders.isPast(when, offset)) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'เวลาเตือนที่เลือกผ่านไปแล้ว กรุณาเลือกใหม่',
+                                ),
+                              ),
+                            );
+
+                            return;
+                          }
+
                           Navigator.of(sheetContext).pop({
                             'title': cleanTitle,
 
@@ -783,6 +886,13 @@ class _ActivityPageState extends State<ActivityPage> {
                             'activity_date': selectedDateTime,
 
                             'visibility': selectedVisibility,
+
+                            'reminder_offset': editingCompleted ? null : offset,
+
+                            // แก้ไข: ส่งการเตือนเฉพาะเมื่อเปลี่ยนการเตือนหรือเวลา
+                            'change_reminder':
+                                !editingCompleted &&
+                                (timeChanged || reminderChanged),
                           });
                         },
 
@@ -832,6 +942,7 @@ class _ActivityPageState extends State<ActivityPage> {
             description: result['description']?.toString() ?? '',
             activityDate: result['activity_date'] as DateTime?,
             visibility: result['visibility']?.toString() ?? 'private',
+            reminderOffset: result['reminder_offset'] as int?,
           );
 
     // บันทึกไม่สำเร็จ → เปิดฟอร์มเดิมพร้อมข้อมูลที่กรอกไว้ (ปิดฟอร์มได้ถ้าไม่ต้องการ)
@@ -862,6 +973,8 @@ class _ActivityPageState extends State<ActivityPage> {
         title: values['title'].toString(),
         description: description.isEmpty ? null : description,
         activityDate: values['activity_date'] as DateTime?,
+        changeReminder: values['change_reminder'] == true,
+        reminderOffset: values['reminder_offset'] as int?,
       );
 
       if (!mounted) return true;
@@ -897,6 +1010,7 @@ class _ActivityPageState extends State<ActivityPage> {
     required String description,
     required String visibility,
     DateTime? activityDate,
+    int? reminderOffset,
   }) async {
     setState(() {
       isCreating = true;
@@ -911,6 +1025,8 @@ class _ActivityPageState extends State<ActivityPage> {
         activityDate: activityDate,
 
         visibility: visibility,
+
+        reminderOffset: reminderOffset,
       );
 
       if (!mounted) return true;
@@ -1167,6 +1283,45 @@ class _ActivityPageState extends State<ActivityPage> {
     }
   }
 
+  // เวลาตามนาฬิกาเครื่องนี้ (starts_at → เวลาท้องถิ่น / กิจกรรมเดิม → activity_date)
+  String activityTimeText(Map<String, dynamic> activity) {
+    final date = ActivityReminders.startOf(activity);
+
+    if (date == null) {
+      return 'ไม่กำหนดเวลา';
+    }
+
+    return formatDateTime(date);
+  }
+
+  // การเตือนของตัวเองที่รอส่ง → ป้ายในรายการ
+  String? reminderBadge(Map<String, dynamic> activity) {
+    final reminder = ActivityReminders.mine(activity);
+
+    if (reminder == null || reminder['status'] != 'pending') {
+      return null;
+    }
+
+    return 'เตือน ${ActivityReminders.label(ActivityReminders.offsetOf(activity))}';
+  }
+
+  // กดรายการ → หน้ารายละเอียด (ตั้งเตือนของตัวเองได้) / กลับมาแล้วมีการเปลี่ยนแปลง → โหลดใหม่
+  Future<void> openDetail(Map<String, dynamic> activity) async {
+    final dynamic id = activity['id'];
+
+    if (id is! num) return;
+
+    final bool? changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ActivityDetailPage(activityId: id.toInt()),
+      ),
+    );
+
+    if (changed == true && mounted) {
+      await loadActivities();
+    }
+  }
+
   String activityDateText(dynamic value) {
     final date = parseDate(value);
 
@@ -1365,364 +1520,403 @@ class _ActivityPageState extends State<ActivityPage> {
 
       duration: const Duration(milliseconds: 200),
 
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
 
-        padding: const EdgeInsets.fromLTRB(14, 14, 8, 14),
-
-        decoration: BoxDecoration(
-          color: AppColors.surface,
+        child: InkWell(
+          onTap: () => openDetail(activity),
 
           borderRadius: BorderRadius.circular(22),
 
-          border: AppDecorations.cardBorder,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 14, 8, 14),
 
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.navy.withValues(alpha: 0.03),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
 
-              blurRadius: 18,
+              borderRadius: BorderRadius.circular(22),
 
-              offset: const Offset(0, 7),
-            ),
-          ],
-        ),
+              border: AppDecorations.cardBorder,
 
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.navy.withValues(alpha: 0.03),
 
-          children: [
-            // ===========================================
-            // STATUS ICON
-            // ===========================================
+                  blurRadius: 18,
 
-            InkWell(
-              onTap: manageable
-                  ? () {
-                      toggleActivity(activity);
-                    }
-                  : null,
-
-              borderRadius: BorderRadius.circular(99),
-
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-
-                width: 46,
-                height: 46,
-
-                decoration: BoxDecoration(
-                  color: completed
-                      ? AppColors.success
-                      : shared
-                      ? AppColors.sky.withValues(alpha: 0.12)
-                      : AppColors.primary.withValues(alpha: 0.09),
-
-                  shape: BoxShape.circle,
+                  offset: const Offset(0, 7),
                 ),
-
-                child: Icon(
-                  completed
-                      ? Icons.check_rounded
-                      : shared
-                      ? Icons.groups_rounded
-                      : Icons.lock_outline_rounded,
-
-                  color: completed
-                      ? Colors.white
-                      : shared
-                      ? AppColors.sky
-                      : AppColors.primary,
-                ),
-              ),
+              ],
             ),
 
-            const SizedBox(width: 13),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
 
-            // ===========================================
-            // CONTENT
-            // ===========================================
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ===========================================
+                // STATUS ICON
+                // ===========================================
 
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
+                InkWell(
+                  onTap: manageable
+                      ? () {
+                          toggleActivity(activity);
+                        }
+                      : null,
 
-                          style: TextStyle(
-                            color: AppColors.navy,
+                  borderRadius: BorderRadius.circular(99),
 
-                            fontSize: 15,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
 
-                            fontWeight: FontWeight.w800,
+                    width: 46,
+                    height: 46,
 
-                            decoration: completed
-                                ? TextDecoration.lineThrough
-                                : null,
-                          ),
-                        ),
-                      ),
+                    decoration: BoxDecoration(
+                      color: completed
+                          ? AppColors.success
+                          : shared
+                          ? AppColors.sky.withValues(alpha: 0.12)
+                          : AppColors.primary.withValues(alpha: 0.09),
 
-                      _VisibilityBadge(family: shared),
-                    ],
-                  ),
-
-                  const SizedBox(height: 7),
-
-                  Row(
-                    children: [
-                      buildOwnerAvatar(
-                        name: creator,
-                        imageUrl: creatorImageUrl,
-                      ),
-
-                      const SizedBox(width: 7),
-
-                      Expanded(
-                        child: Text(
-                          mine ? 'สร้างโดยคุณ' : 'สร้างโดย $creator',
-
-                          maxLines: 1,
-
-                          overflow: TextOverflow.ellipsis,
-
-                          style: TextStyle(
-                            color: AppColors.muted,
-                            fontSize: 10,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  if (description.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-
-                    Text(
-                      description,
-
-                      style: TextStyle(
-                        color: AppColors.muted,
-
-                        fontSize: 12,
-
-                        height: 1.4,
-                      ),
+                      shape: BoxShape.circle,
                     ),
-                  ],
 
-                  const SizedBox(height: 10),
+                    child: Icon(
+                      completed
+                          ? Icons.check_rounded
+                          : shared
+                          ? Icons.groups_rounded
+                          : Icons.lock_outline_rounded,
 
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.schedule_rounded,
-
-                        color: AppColors.muted,
-
-                        size: 14,
-                      ),
-
-                      const SizedBox(width: 5),
-
-                      Expanded(
-                        child: Text(
-                          activityDateText(activity['activity_date']),
-
-                          style: TextStyle(
-                            color: AppColors.muted,
-                            fontSize: 10,
-                          ),
-                        ),
-                      ),
-                    ],
+                      color: completed
+                          ? Colors.white
+                          : shared
+                          ? AppColors.sky
+                          : AppColors.primary,
+                    ),
                   ),
+                ),
 
-                  if (!manageable && shared) ...[
-                    const SizedBox(height: 9),
+                const SizedBox(width: 13),
 
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 9,
-                        vertical: 6,
-                      ),
+                // ===========================================
+                // CONTENT
+                // ===========================================
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
 
-                      decoration: BoxDecoration(
-                        color: AppColors.sky.withValues(alpha: 0.07),
-
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-
+                    children: [
+                      Row(
                         children: [
-                          Icon(
-                            Icons.visibility_outlined,
+                          Expanded(
+                            child: Text(
+                              title,
 
-                            color: AppColors.sky,
+                              style: TextStyle(
+                                color: AppColors.navy,
 
-                            size: 13,
+                                fontSize: 15,
+
+                                fontWeight: FontWeight.w800,
+
+                                decoration: completed
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                              ),
+                            ),
                           ),
 
-                          SizedBox(width: 5),
+                          _VisibilityBadge(family: shared),
+                        ],
+                      ),
 
-                          Text(
-                            'กิจกรรมที่แชร์โดยสมาชิก',
+                      const SizedBox(height: 7),
 
-                            style: TextStyle(
-                              color: AppColors.muted,
-                              fontSize: 9,
+                      Row(
+                        children: [
+                          buildOwnerAvatar(
+                            name: creator,
+                            imageUrl: creatorImageUrl,
+                          ),
+
+                          const SizedBox(width: 7),
+
+                          Expanded(
+                            child: Text(
+                              mine ? 'สร้างโดยคุณ' : 'สร้างโดย $creator',
+
+                              maxLines: 1,
+
+                              overflow: TextOverflow.ellipsis,
+
+                              style: TextStyle(
+                                color: AppColors.muted,
+                                fontSize: 10,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
 
-            // ===========================================
-            // OWNER MENU
-            // ===========================================
-            if (manageable)
-              PopupMenuButton<String>(
-                tooltip: 'จัดการ',
+                      if (description.isNotEmpty) ...[
+                        const SizedBox(height: 8),
 
-                onSelected: (value) {
-                  if (value == 'edit') {
-                    showCreateActivitySheet(editing: activity);
-                  }
+                        Text(
+                          description,
 
-                  if (value == 'toggle') {
-                    toggleActivity(activity);
-                  }
-                  if (value == 'private') {
-                    changeVisibility(activity, 'private');
-                  }
+                          style: TextStyle(
+                            color: AppColors.muted,
 
-                  if (value == 'family') {
-                    changeVisibility(activity, 'family');
-                  }
+                            fontSize: 12,
 
-                  if (value == 'delete') {
-                    deleteActivity(activity);
-                  }
-                },
-
-                itemBuilder: (_) => [
-                  PopupMenuItem(
-                    value: 'edit',
-
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit_outlined, color: AppColors.primary),
-
-                        const SizedBox(width: 10),
-
-                        const Text('แก้ไข'),
-                      ],
-                    ),
-                  ),
-
-                  PopupMenuItem(
-                    value: 'toggle',
-
-                    child: Row(
-                      children: [
-                        Icon(
-                          completed
-                              ? Icons.restart_alt_rounded
-                              : Icons.check_circle_outline_rounded,
-
-                          color: AppColors.primary,
+                            height: 1.4,
+                          ),
                         ),
-
-                        const SizedBox(width: 10),
-
-                        Text(completed ? 'ทำอีกครั้ง' : 'ทำเสร็จแล้ว'),
                       ],
-                    ),
-                  ),
 
-                  if (shared)
-                    PopupMenuItem(
-                      value: 'private',
+                      const SizedBox(height: 10),
 
-                      child: Row(
+                      Row(
                         children: [
                           Icon(
-                            Icons.lock_outline_rounded,
+                            Icons.schedule_rounded,
 
-                            color: AppColors.primary,
+                            color: AppColors.muted,
+
+                            size: 14,
                           ),
 
-                          SizedBox(width: 10),
+                          const SizedBox(width: 5),
 
-                          Text('เปลี่ยนเป็นส่วนตัว'),
-                        ],
-                      ),
-                    )
-                  else
-                    PopupMenuItem(
-                      value: 'family',
+                          Expanded(
+                            child: Text(
+                              activityTimeText(activity),
 
-                      enabled: hasFamily,
-
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.groups_rounded,
-
-                            color: hasFamily ? AppColors.sky : AppColors.muted,
+                              style: TextStyle(
+                                color: AppColors.muted,
+                                fontSize: 10,
+                              ),
+                            ),
                           ),
-
-                          const SizedBox(width: 10),
-
-                          Text(hasFamily ? 'แชร์กับกลุ่ม' : 'ยังไม่มีกลุ่ม'),
                         ],
                       ),
-                    ),
 
-                  const PopupMenuDivider(),
+                      if (reminderBadge(activity) != null) ...[
+                        const SizedBox(height: 6),
 
-                  PopupMenuItem(
-                    value: 'delete',
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.notifications_active_outlined,
+                              color: AppColors.primary,
+                              size: 14,
+                            ),
 
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.delete_outline_rounded,
+                            const SizedBox(width: 5),
 
-                          color: AppColors.danger,
+                            Expanded(
+                              child: Text(
+                                reminderBadge(activity)!,
+                                style: TextStyle(
+                                  color: AppColors.primary,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-
-                        SizedBox(width: 10),
-
-                        Text('ลบกิจกรรม'),
                       ],
-                    ),
+
+                      if (!manageable && shared) ...[
+                        const SizedBox(height: 9),
+
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 6,
+                          ),
+
+                          decoration: BoxDecoration(
+                            color: AppColors.sky.withValues(alpha: 0.07),
+
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+
+                            children: [
+                              Icon(
+                                Icons.visibility_outlined,
+
+                                color: AppColors.sky,
+
+                                size: 13,
+                              ),
+
+                              SizedBox(width: 5),
+
+                              Text(
+                                'กิจกรรมที่แชร์โดยสมาชิก',
+
+                                style: TextStyle(
+                                  color: AppColors.muted,
+                                  fontSize: 9,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                ],
-              )
-            else
-              Padding(
-                padding: EdgeInsets.only(top: 12, right: 8),
-
-                child: Icon(
-                  Icons.visibility_outlined,
-
-                  color: AppColors.muted,
-
-                  size: 18,
                 ),
-              ),
-          ],
+
+                // ===========================================
+                // OWNER MENU
+                // ===========================================
+                if (manageable)
+                  PopupMenuButton<String>(
+                    tooltip: 'จัดการ',
+
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        showCreateActivitySheet(editing: activity);
+                      }
+
+                      if (value == 'toggle') {
+                        toggleActivity(activity);
+                      }
+                      if (value == 'private') {
+                        changeVisibility(activity, 'private');
+                      }
+
+                      if (value == 'family') {
+                        changeVisibility(activity, 'family');
+                      }
+
+                      if (value == 'delete') {
+                        deleteActivity(activity);
+                      }
+                    },
+
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: 'edit',
+
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_outlined, color: AppColors.primary),
+
+                            const SizedBox(width: 10),
+
+                            const Text('แก้ไข'),
+                          ],
+                        ),
+                      ),
+
+                      PopupMenuItem(
+                        value: 'toggle',
+
+                        child: Row(
+                          children: [
+                            Icon(
+                              completed
+                                  ? Icons.restart_alt_rounded
+                                  : Icons.check_circle_outline_rounded,
+
+                              color: AppColors.primary,
+                            ),
+
+                            const SizedBox(width: 10),
+
+                            Text(completed ? 'ทำอีกครั้ง' : 'ทำเสร็จแล้ว'),
+                          ],
+                        ),
+                      ),
+
+                      if (shared)
+                        PopupMenuItem(
+                          value: 'private',
+
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.lock_outline_rounded,
+
+                                color: AppColors.primary,
+                              ),
+
+                              SizedBox(width: 10),
+
+                              Text('เปลี่ยนเป็นส่วนตัว'),
+                            ],
+                          ),
+                        )
+                      else
+                        PopupMenuItem(
+                          value: 'family',
+
+                          enabled: hasFamily,
+
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.groups_rounded,
+
+                                color: hasFamily
+                                    ? AppColors.sky
+                                    : AppColors.muted,
+                              ),
+
+                              const SizedBox(width: 10),
+
+                              Text(
+                                hasFamily ? 'แชร์กับกลุ่ม' : 'ยังไม่มีกลุ่ม',
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      const PopupMenuDivider(),
+
+                      PopupMenuItem(
+                        value: 'delete',
+
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.delete_outline_rounded,
+
+                              color: AppColors.danger,
+                            ),
+
+                            SizedBox(width: 10),
+
+                            Text('ลบกิจกรรม'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  Padding(
+                    padding: EdgeInsets.only(top: 12, right: 8),
+
+                    child: Icon(
+                      Icons.visibility_outlined,
+
+                      color: AppColors.muted,
+
+                      size: 18,
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );

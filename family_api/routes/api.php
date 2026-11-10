@@ -673,6 +673,17 @@ Route::middleware('auth:sanctum')->group(function () {
         'store'
     ]);
 
+    // รายละเอียดกิจกรรม (เปิดจากแจ้งเตือน) และตั้งเตือนของตัวเอง (สมาชิกที่เห็นกิจกรรมตั้งได้ ไม่ต้องมีสิทธิ์แก้ไข)
+    Route::get('/activities/{activity}', [
+        ActivityController::class,
+        'show'
+    ]);
+
+    Route::put('/activities/{activity}/reminder', [
+        ActivityController::class,
+        'reminder'
+    ])->middleware('throttle:30,1');
+
     Route::patch('/activities/{activity}/toggle', [
         ActivityController::class,
         'toggle'

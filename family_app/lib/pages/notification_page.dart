@@ -10,6 +10,7 @@ import 'my_shop_page.dart';
 import 'order_page.dart';
 import 'post_detail_page.dart';
 import 'support_ticket_page.dart';
+import 'activity_detail_page.dart';
 
 // แท็บในหน้าหลักที่ต้องเปิดหลังกดการแจ้งเตือน
 // (หน้าแจ้งเตือนปิดตัวเองแล้วส่งค่านี้กลับไป)
@@ -349,6 +350,19 @@ class _NotificationPageState extends State<NotificationPage> {
           return;
         }
 
+      // เตือนกิจกรรม → หน้ารายละเอียด (ถูกลบ / ไม่มีสิทธิ์แล้ว → ข้อความแจ้ง)
+      case 'activity_reminder':
+        final int? activityId = dataId('activity_id');
+
+        if (activityId != null) {
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => ActivityDetailPage(activityId: activityId),
+            ),
+          );
+          return;
+        }
+
       case 'new_activity':
         Navigator.of(context).pop(NotificationTarget.activities);
         return;
@@ -459,6 +473,11 @@ class _NotificationPageState extends State<NotificationPage> {
         return _NotificationStyle(
           icon: Icons.event_available_rounded,
           color: AppColors.success,
+        );
+      case 'activity_reminder':
+        return _NotificationStyle(
+          icon: Icons.alarm_rounded,
+          color: AppColors.warm,
         );
       case 'shop_status':
         return const _NotificationStyle(

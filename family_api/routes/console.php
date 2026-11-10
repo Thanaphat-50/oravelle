@@ -26,3 +26,12 @@ Schedule::command('orders:expire')
     ->hourly()
     ->withoutOverlapping(10)
     ->onOneServer();
+
+// แจ้งเตือนกิจกรรมล่วงหน้า (App\Console\Commands\SendActivityReminders)
+// ทุก ACTIVITY_REMINDER_EVERY_MINUTES นาที (ค่าเริ่มต้น 5) แยกจากงานคำสั่งซื้อรายชั่วโมง
+// ⚠️ Scale to zero: Scheduler ปลุกแอปทุกรอบ → รอบ 5 นาทีทำให้แอปแทบไม่ได้หลับ (ค่าเครื่องใกล้เต็มเดือน)
+//    รอบยาวขึ้น = ประหยัดขึ้นแต่เตือนช้าได้ถึงเท่ารอบ (ดู docs/activity-reminders.md)
+Schedule::command('activities:send-reminders')
+    ->cron('*/' . config('reminders.every_minutes') . ' * * * *')
+    ->withoutOverlapping(10)
+    ->onOneServer();

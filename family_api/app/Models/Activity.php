@@ -16,6 +16,9 @@ class Activity extends Model
         'title',
         'description',
         'activity_date',
+        // ช่วงเวลาจริง (UTC) + เขตเวลา IANA ของกิจกรรม — กิจกรรมเดิมเป็น NULL (ไม่ทราบเขตเวลา)
+        'starts_at',
+        'timezone',
         'is_completed',
     ];
 
@@ -24,6 +27,7 @@ class Activity extends Model
         // เดิมส่งกลับเป็น UTC (มี Z) แอปเลยบวกเวลาเพิ่มตามเขตเวลาเครื่อง (ไทย +7 ชั่วโมง)
         'activity_date' => 'datetime:Y-m-d\TH:i:s',
         'is_completed' => 'boolean',
+        'starts_at' => 'datetime',
     ];
 
     // =====================================================
@@ -58,6 +62,29 @@ class Activity extends Model
         }
 
         return parent::toArray();
+    }
+
+    public function reminders()
+    {
+        return $this->hasMany(ActivityReminder::class);
+    }
+
+    // เห็นกิจกรรมนี้ได้ไหม: เจ้าของ / สมาชิกปัจจุบันของกลุ่มที่แชร์ (ตรวจทั้งตอนตั้งเตือนและก่อนส่ง)
+    public function isVisibleTo(int $userId): bool
+    {
+        if ((int) $this->user_id === $userId) {
+            return true;
+        }
+
+        return $this->visibility === 'family'
+            && $this->family_id !== null
+            && FamilyMember::where('user_id', $userId)->where('family_id', $this->family_id)->exists();
+    }
+
+    // ตั้งเตือนได้เมื่อรู้ช่วงเวลาจริง (กิจกรรมเดิมต้องให้เจ้าของยืนยันวันเวลาก่อน)
+    public function canRemind(): bool
+    {
+        return $this->starts_at !== null && !$this->is_completed;
     }
 
     public function isPrivate(): bool

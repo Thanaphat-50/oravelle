@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Activity;
+use App\Models\ActivityReminder;
 use App\Models\AppNotification;
 use App\Models\Family;
 use App\Models\FamilyInvitation;
@@ -500,6 +501,9 @@ class FamilyController extends Controller
             $member->delete();
         });
 
+        // หมดสิทธิ์เห็นกิจกรรมกลุ่ม → ยกเลิกการเตือนที่ยังไม่ส่ง (ก่อนส่งจริงก็ตรวจสิทธิ์ซ้ำอีกชั้น)
+        ActivityReminder::revokeLostAccess();
+
         return response()->json([
             'status' =>
                 true,
@@ -592,6 +596,9 @@ class FamilyController extends Controller
 
             $membership->delete();
         });
+
+        // หมดสิทธิ์เห็นกิจกรรมกลุ่ม → ยกเลิกการเตือนที่ยังไม่ส่ง (ก่อนส่งจริงก็ตรวจสิทธิ์ซ้ำอีกชั้น)
+        ActivityReminder::revokeLostAccess();
 
         return response()->json([
             'status' =>
@@ -867,6 +874,9 @@ class FamilyController extends Controller
 
             $family->delete();
         });
+
+        // หมดสิทธิ์เห็นกิจกรรมกลุ่ม → ยกเลิกการเตือนที่ยังไม่ส่ง (ก่อนส่งจริงก็ตรวจสิทธิ์ซ้ำอีกชั้น)
+        ActivityReminder::revokeLostAccess();
 
         // ลบไฟล์ของโพสต์ที่ถูกลบไปแล้ว
         // (แถวในตารางถูกลบตาม cascade แต่ไฟล์ต้องลบเอง)
