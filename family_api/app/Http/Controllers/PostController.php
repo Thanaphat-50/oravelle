@@ -386,6 +386,139 @@ class PostController extends Controller
     }
 
     // =====================================================
+    // แก้ไขข้อความโพสต์ของตัวเอง
+    // PATCH /api/posts/{post} {content, version}
+    //
+    // - เจ้าของเท่านั้น / โพสต์กลุ่ม: ต้องยังอยู่กลุ่มของโพสต์ (เหมือนลบ)
+    // - โพสต์ที่ถูกซ่อน (รายงานครบ / ทีมงานระงับ) แก้ไม่ได้ — ไม่ให้แก้เพื่อหลบการกลั่นกรอง
+    // - แก้เฉพาะข้อความ (รูป วิดีโอ หมวด ผู้ชม ต้นฉบับที่แชร์ ไม่เปลี่ยน)
+    //   โพสต์แชร์: แก้ได้เฉพาะข้อความที่เราเขียนประกอบ ต้นฉบับของคนอื่นไม่เปลี่ยน
+    // - ข้อความล้วนต้องไม่ว่าง / มีรูป วิดีโอ หรือเป็นโพสต์แชร์ → ว่างได้ (เหมือนตอนสร้าง)
+    // - version = edit_version ที่แอปเห็น: ไม่ตรง → 409 พร้อมข้อความล่าสุด (ไม่เขียนทับเงียบ ๆ)
+    // - ข้อความเหมือนเดิม → ไม่เปลี่ยน edited_at / edit_version
+    // - ข้อความเปลี่ยน → edited_at = ตอนนี้, edit_version + 1, แฮชแท็กคำนวณใหม่ (Post::booted)
+    //   ID วันที่สร้าง ถูกใจ ความคิดเห็น และการแชร์คงเดิม
+    // =====================================================
+
+    public function update(Request $request, Post $post)
+    {
+        $data = $request->validate([
+            'content' => 'nullable|string|max:5000',
+            'version' => 'required|integer|min:0',
+        ], [
+            'content.max' => 'ข้อความยาวได้ไม่เกิน 5,000 ตัวอักษร',
+            'version.required' => 'กรุณาโหลดโพสต์ใหม่แล้วลองอีกครั้ง',
+        ]);
+
+        $user = $request->user();
+
+        if ((int) $post->user_id !== (int) $user->id) {
+            return response()->json([
+                'status' => false,
+                'code' => 'not_owner',
+                'message' => 'คุณแก้ไขได้เฉพาะโพสต์ของตัวเอง',
+            ], 403);
+        }
+
+        $membership = FamilyMember::where('user_id', $user->id)->first();
+
+        if (!$post->isCommunity() && (int) $membership?->family_id !== (int) $post->family_id) {
+            return response()->json([
+                'status' => false,
+                'code' => 'not_in_group',
+                'message' => 'คุณไม่ได้อยู่ในกลุ่มของโพสต์นี้แล้ว',
+            ], 403);
+        }
+
+        $content = trim($data['content'] ?? '');
+
+        $result = DB::transaction(function () use ($post, $content, $data) {
+            $locked = Post::whereKey($post->id)->lockForUpdate()->first();
+
+            if (!$locked) {
+                return 'missing';
+            }
+
+            if ($locked->hidden_at !== null) {
+                return 'hidden';
+            }
+
+            if ($locked->edit_version !== (int) $data['version']) {
+                return 'conflict';
+            }
+
+            $hasMedia = $locked->shared_post_id !== null
+                || $locked->images()->exists()
+                || $locked->video()->exists();
+
+            if ($content === '' && !$hasMedia) {
+                return 'empty';
+            }
+
+            // ข้อความเดิม → ไม่นับเป็นการแก้ไข
+            if ($content === trim((string) $locked->content)) {
+                return 'unchanged';
+            }
+
+            $locked->forceFill([
+                // posts.content เป็นค่าว่างได้ แต่ไม่เป็น NULL (เหมือนตอนสร้างโพสต์รูป/แชร์)
+                'content' => $content,
+                'edited_at' => now(),
+                'edit_version' => $locked->edit_version + 1,
+            ])->save();
+
+            return 'edited';
+        });
+
+        $error = match ($result) {
+            'missing' => [404, 'post_missing', 'ไม่พบโพสต์นี้ หรือโพสต์ถูกลบไปแล้ว'],
+            'hidden' => [403, 'post_hidden', 'โพสต์นี้ถูกซ่อนจากการรายงานหรือโดยทีมงาน จึงแก้ไขไม่ได้'],
+            'empty' => [422, 'content_required', 'กรุณาพิมพ์ข้อความ โพสต์ที่ไม่มีรูปหรือวิดีโอต้องมีข้อความ'],
+            'conflict' => [409, 'edit_conflict', 'โพสต์นี้ถูกแก้ไขจากอีกเครื่องแล้ว กรุณาตรวจข้อความล่าสุดก่อนบันทึก'],
+            default => null,
+        };
+
+        $payload = $this->presentPost($post->id, $user, $membership);
+
+        if ($error) {
+            return response()->json([
+                'status' => false,
+                'code' => $error[1],
+                'message' => $error[2],
+                // แก้ชนกัน: ส่งข้อความล่าสุดให้แอปแสดงก่อนตัดสินใจ
+                'post' => $result === 'conflict' ? $payload : null,
+                ...($result === 'empty' ? ['errors' => ['content' => [$error[2]]]] : []),
+            ], $error[0]);
+        }
+
+        return response()->json([
+            'status' => true,
+            'changed' => $result === 'edited',
+            'message' => $result === 'edited' ? 'บันทึกการแก้ไขแล้ว' : 'ข้อความเหมือนเดิม ไม่มีการเปลี่ยนแปลง',
+            'post' => $payload,
+        ]);
+    }
+
+    // โพสต์เดียวในรูปแบบเดียวกับฟีด/โพสต์เดียว (ใช้หลังแก้ไข)
+    private function presentPost(int $postId, User $user, ?FamilyMember $membership): ?Post
+    {
+        $post = Post::find($postId);
+
+        if (!$post) {
+            return null;
+        }
+
+        $blockedIds = $user->blockedUsers()->pluck('users.id');
+
+        $found = Post::whereKey($postId)
+            ->with($post->isCommunity() ? $this->communityRelations($user, $blockedIds) : $this->familyRelations())
+            ->tap(fn ($posts) => $this->withLikeInfo($posts, $user))
+            ->first();
+
+        return $found ? $this->withOwnership($found, $user, $blockedIds) : null;
+    }
+
+    // =====================================================
     // สร้าง Post
     // visibility: family (ค่าเริ่มต้น) / community
     // category:   ใช้เฉพาะโพสต์ชุมชน (ค่าเริ่มต้น general)

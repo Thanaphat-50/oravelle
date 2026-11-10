@@ -418,6 +418,39 @@ class PostService {
   // DELETE POST
   // =====================================================
 
+  // =====================================================
+  // แก้ไขข้อความโพสต์ของตัวเอง
+  // version = edit_version ที่เห็นตอนเปิดฟอร์ม
+  // 409 (code edit_conflict) = มีการแก้จากอีกเครื่อง → result['post'] คือข้อความล่าสุด
+  // =====================================================
+
+  static Future<Map<String, dynamic>> updatePost({
+    required int postId,
+    required String content,
+    required int version,
+  }) async {
+    final headers = await _headers();
+
+    final response = await ApiHelper.request(
+      () => http.patch(
+        Uri.parse('$baseUrl/posts/$postId'),
+        headers: headers,
+        body: jsonEncode({'content': content, 'version': version}),
+      ),
+    );
+
+    // โพสต์ถูกลบไประหว่างแก้
+    if (response.statusCode == 404) {
+      return {
+        'status': false,
+        'code': 'post_missing',
+        'message': 'ไม่พบโพสต์นี้ หรือโพสต์ถูกลบไปแล้ว',
+      };
+    }
+
+    return ApiHelper.decode(response);
+  }
+
   static Future<Map<String, dynamic>> deletePost(int postId) async {
     final headers = await _headers();
 

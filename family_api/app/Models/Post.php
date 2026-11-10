@@ -39,6 +39,9 @@ class Post extends Model
 
     protected $casts = [
         'hidden_at' => 'datetime',
+        // ข้อความเปลี่ยนจริงครั้งล่าสุด (NULL = ไม่เคยแก้) / เพิ่มทุกครั้งที่ข้อความเปลี่ยน
+        'edited_at' => 'datetime',
+        'edit_version' => 'integer',
         'map_status_until' => 'datetime',
     ];
 

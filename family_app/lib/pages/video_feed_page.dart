@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 
 import '../config/app_info.dart';
+import '../services/post_events.dart';
 import '../services/post_service.dart';
 import '../services/social_service.dart';
 import '../widgets/comment_sheet.dart';
@@ -55,8 +58,15 @@ class _VideoFeedPageState extends State<VideoFeedPage> {
   void initState() {
     super.initState();
 
+    // คำบรรยายถูกแก้จากหน้าอื่น → อัปเดตคลิปที่โหลดไว้
+    postChanges = PostEvents.changes.listen((change) {
+      if (PostEvents.apply(posts, change) && mounted) setState(() {});
+    });
+
     loadVideos();
   }
+
+  StreamSubscription<PostChange>? postChanges;
 
   // =====================================================
   // โหลดวิดีโอ (ทีละหน้า เลื่อนใกล้ท้ายแล้วโหลดต่อ)
@@ -689,6 +699,8 @@ class _VideoFeedPageState extends State<VideoFeedPage> {
 
   @override
   void dispose() {
+    postChanges?.cancel();
+
     pageController.dispose();
 
     super.dispose();

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:video_compress/video_compress.dart';
 
 import '../config/app_info.dart';
+import '../services/post_events.dart';
 import '../services/post_service.dart';
 import '../services/search_service.dart';
 import '../services/social_service.dart';
@@ -18,6 +20,7 @@ import '../widgets/photo_viewer.dart';
 import '../widgets/post_categories.dart';
 import '../widgets/share_sheet.dart';
 import 'post_detail_page.dart';
+import 'post_edit_page.dart';
 import 'search_page.dart';
 import 'user_profile_page.dart';
 import 'video_player_page.dart';
@@ -275,11 +278,17 @@ class _FeedPageState extends State<FeedPage> {
 
   bool get categoryFromParent => widget.onCategoryChanged != null;
 
+  // โพสต์ถูกแก้/เปลี่ยนจากหน้าอื่น → อัปเดตรายการในหน้านี้ (รวมต้นฉบับในโพสต์แชร์)
+  StreamSubscription<PostChange>? postChanges;
+
   @override
   void initState() {
     super.initState();
     if (categoryFromParent) filterCategory = widget.category;
     scrollController.addListener(onScroll);
+    postChanges = PostEvents.changes.listen((change) {
+      if (PostEvents.apply(feed.posts, change) && mounted) setState(() {});
+    });
     loadPosts();
 
     if (forYou) loadSuggestions();
@@ -1229,6 +1238,21 @@ class _FeedPageState extends State<FeedPage> {
   // =====================================================
   // ลบโพสต์
   // =====================================================
+
+  // แก้ไขข้อความโพสต์ของตัวเอง → ทุกหน้าที่แสดงโพสต์นี้อัปเดตตาม (PostEvents)
+  // หน้านี้ยังเปิดอยู่ข้างหลัง → ตำแหน่งเลื่อนและคำค้นเดิม
+  Future<void> editPost(Map<String, dynamic> post) async {
+    final Map<String, dynamic>? updated = await Navigator.of(context)
+        .push<Map<String, dynamic>>(
+          MaterialPageRoute(builder: (_) => PostEditPage(post: post)),
+        );
+
+    if (updated == null) return;
+
+    PostEvents.edited(updated);
+
+    if (mounted) showMessage('บันทึกการแก้ไขแล้ว');
+  }
 
   Future<void> confirmDeletePost(int postId) async {
     dismissKeyboard();
@@ -3455,10 +3479,14 @@ class _FeedPageState extends State<FeedPage> {
                                 ],
                                 Flexible(
                                   child: Text(
-                                    category != null
-                                        ? formatDate(post['created_at'])
-                                        : '${community ? 'ชุมชน' : 'กลุ่ม'} · '
-                                              '${formatDate(post['created_at'])}',
+                                    (category != null
+                                            ? formatDate(post['created_at'])
+                                            : '${community ? 'ชุมชน' : 'กลุ่ม'} · '
+                                                  '${formatDate(post['created_at'])}') +
+                                        // ข้อความเคยเปลี่ยนจริง
+                                        (post['edited_at'] != null
+                                            ? ' · แก้ไขแล้ว'
+                                            : ''),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
@@ -3807,6 +3835,8 @@ class _FeedPageState extends State<FeedPage> {
         switch (value) {
           case 'map':
             toggleMapStatus(post, postId);
+          case 'edit':
+            editPost(post);
           case 'delete':
             confirmDeletePost(postId);
           case 'report':
@@ -3826,6 +3856,14 @@ class _FeedPageState extends State<FeedPage> {
                   ? Icons.location_off_outlined
                   : Icons.add_location_alt_outlined,
               label: onMap ? 'เอาออกจากแผนที่' : 'แสดงบนแผนที่',
+              color: AppColors.navy,
+            ),
+          // โพสต์ที่ถูกซ่อน (รายงาน/ทีมงาน) แก้ไม่ได้ — เซิร์ฟเวอร์ตรวจซ้ำ
+          if (mine && post['is_hidden'] != true)
+            buildMenuItem(
+              value: 'edit',
+              icon: Icons.edit_outlined,
+              label: 'แก้ไขโพสต์',
               color: AppColors.navy,
             ),
           if (mine)
@@ -4449,6 +4487,8 @@ class _FeedPageState extends State<FeedPage> {
 
   @override
   void dispose() {
+    postChanges?.cancel();
+
     composerVersion.dispose();
 
     postController.dispose();

@@ -169,6 +169,12 @@ Route::middleware('auth:sanctum')->group(function () {
         'destroy'
     ]);
 
+    // แก้ไขข้อความโพสต์ของตัวเอง
+    Route::patch('/posts/{post}', [
+        PostController::class,
+        'update'
+    ])->middleware('throttle:ugc');
+
     Route::post('/posts/{post}/comments', [
         CommentController::class,
         'store'
