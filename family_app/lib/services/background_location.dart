@@ -249,8 +249,16 @@ Future<void> backgroundLocationMain(ServiceInstance service) async {
           )
           .timeout(const Duration(seconds: 20));
 
-      // Token หมดอายุ / ออกจากครอบครัว
-      if (response.statusCode == 401 || response.statusCode == 403) {
+      // เซสชันหมดอายุ / ถูกยกเลิกสิทธิ์จากเครื่องอื่น → ปิดสวิตช์ด้วย
+      // (ไม่เริ่มเองอีกตอนเปิดเครื่อง / บัญชีถัดไปบนเครื่องนี้ต้องเปิดเอง เหมือนออกจากระบบ)
+      if (response.statusCode == 401) {
+        await BackgroundLocation._setEnabled(false);
+        await stop();
+        return;
+      }
+
+      // ออกจากครอบครัว
+      if (response.statusCode == 403) {
         await stop();
         return;
       }

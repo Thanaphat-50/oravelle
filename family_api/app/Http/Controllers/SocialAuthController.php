@@ -6,6 +6,7 @@ use App\Models\SocialAccount;
 use App\Models\User;
 use App\Services\SocialIdentityVerifier;
 use App\Services\SocialLoginException;
+use App\Support\AppSessions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -233,7 +234,8 @@ class SocialAuthController extends Controller
 
     private function signIn(User $user, bool $created)
     {
-        $token = $user->createToken('family-app')->plainTextToken;
+        // เซสชันของแอป + ข้อมูลอุปกรณ์จากคำขอเข้าสู่ระบบนี้
+        $token = AppSessions::issue($user, request());
 
         return response()->json([
             'status' => true,

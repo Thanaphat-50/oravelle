@@ -26,18 +26,28 @@ class DeviceTokenController extends Controller
 
         $accessToken = $user->currentAccessToken();
 
-        // เครื่องเดิมเปลี่ยนบัญชี → รหัสเครื่องย้ายมาเป็นของบัญชีนี้
+        $accessTokenId = $accessToken instanceof PersonalAccessToken && $accessToken->exists
+            ? $accessToken->getKey()
+            : null;
+
+        // เครื่องเดิมเปลี่ยนบัญชี → รหัสเครื่องย้ายมาเป็นของบัญชีนี้ (และผูกกับเซสชันนี้)
         DeviceToken::updateOrCreate(
             ['token' => $data['token']],
             [
                 'user_id' => $user->id,
-                'access_token_id' => $accessToken instanceof PersonalAccessToken && $accessToken->exists
-                    ? $accessToken->getKey()
-                    : null,
+                'access_token_id' => $accessTokenId,
                 'platform' => $data['platform'] ?? 'android',
                 'last_used_at' => now(),
             ]
         );
+
+        // 1 เซสชัน = 1 เครื่อง: รหัส Push ของเครื่องนี้เปลี่ยน → รหัสเก่าของเซสชันเดียวกันใช้ไม่ได้แล้ว
+        // (ไม่แตะเซสชันอื่น / แถวเก่าที่ไม่ได้ผูกเซสชัน)
+        if ($accessTokenId !== null) {
+            DeviceToken::where('access_token_id', $accessTokenId)
+                ->where('token', '!=', $data['token'])
+                ->delete();
+        }
 
         // เก็บเฉพาะเครื่องล่าสุด
         $staleIds = DeviceToken::where('user_id', $user->id)

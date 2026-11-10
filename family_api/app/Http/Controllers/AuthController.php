@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Support\AppSessions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -32,7 +33,8 @@ class AuthController extends Controller
             'password' => Hash::make($data['password']),
         ]);
 
-        $token = $user->createToken('family-app')->plainTextToken;
+        // เซสชันของแอป + ข้อมูลอุปกรณ์ (แอปเวอร์ชันเก่าไม่ส่ง → อุปกรณ์ไม่ทราบชื่อ)
+        $token = AppSessions::issue($user, $request);
 
         return response()->json([
             'status' => true,
@@ -61,7 +63,7 @@ class AuthController extends Controller
             ]);
         }
 
-        $token = $user->createToken('family-app')->plainTextToken;
+        $token = AppSessions::issue($user, $request);
 
         return response()->json([
             'status' => true,

@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 
 import 'api_helper.dart';
 import 'auth_service.dart';
+import 'device_info_service.dart';
 import '../config/api_config.dart';
 
 // =======================================================
@@ -238,6 +239,9 @@ class SocialAuthService {
   static Future<Map<String, dynamic>> signIn(SocialProvider provider) async {
     final credential = await _credential(provider);
 
+    // รุ่นเครื่อง / ระบบ / เวอร์ชันแอป (หน้า "อุปกรณ์ที่เข้าสู่ระบบ")
+    final Map<String, String> device = await DeviceInfoService.payload();
+
     final response = await ApiHelper.request(
       () => http.post(
         Uri.parse('$baseUrl/auth/social/${provider.key}'),
@@ -245,7 +249,7 @@ class SocialAuthService {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode(credential),
+        body: jsonEncode({...credential, ...device}),
       ),
     );
 

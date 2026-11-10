@@ -115,6 +115,13 @@ class AppServiceProvider extends ServiceProvider
                 ->response($this->tooManyAttempts(...));
         });
 
+        // อุปกรณ์ที่เข้าสู่ระบบ: ดูรายการ / ยกเลิกสิทธิ์เครื่องอื่น
+        RateLimiter::for('sessions', function (Request $request) {
+            return Limit::perMinute(30)
+                ->by('sessions:' . ($request->user()?->id ?? $request->ip()))
+                ->response($this->tooManyAttempts(...));
+        });
+
         // ค้นหาโพสต์/ผู้ใช้: แอปรอหยุดพิมพ์ 400 มิลลิวินาทีก่อนค้น (พิมพ์ต่อเนื่องได้สบาย)
         RateLimiter::for('search', function (Request $request) {
             return Limit::perMinute(60)

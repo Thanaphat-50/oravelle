@@ -27,6 +27,7 @@ use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SavedPostController;
 use App\Http\Controllers\SearchController;
+use App\Http\Controllers\SessionController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SocialAuthController;
 use App\Http\Controllers\NotificationController;
@@ -207,6 +208,14 @@ Route::middleware('auth:sanctum')->group(function () {
         PostController::class,
         'share'
     ])->middleware('throttle:ugc');
+
+    // อุปกรณ์ที่เข้าสู่ระบบ (SessionController) — จัดการได้เฉพาะเซสชันของตัวเอง
+    Route::middleware('throttle:sessions')->group(function () {
+        Route::get('/sessions', [SessionController::class, 'index']);
+        Route::put('/sessions/current', [SessionController::class, 'updateCurrent']);
+        Route::post('/sessions/revoke-others', [SessionController::class, 'revokeOthers']);
+        Route::delete('/sessions/{session}', [SessionController::class, 'destroy'])->whereNumber('session');
+    });
 
     // ค้นหาโพสต์ (ชุมชน / ในกลุ่ม) และผู้ใช้ (SearchController)
     Route::middleware('throttle:search')->group(function () {

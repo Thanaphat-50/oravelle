@@ -13,6 +13,7 @@ import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 import '../widgets/background_location_prompt.dart';
 import '../widgets/community_sheets.dart';
+import 'devices_page.dart';
 import 'login_page.dart';
 import 'support_center_page.dart';
 
@@ -1461,6 +1462,14 @@ class _SettingsPageState extends State<SettingsPage> {
               title: hasPassword ? 'เปลี่ยนรหัสผ่าน' : 'ตั้งรหัสผ่าน',
               color: AppColors.warm,
               onTap: changePassword,
+            ),
+            buildActionRow(
+              icon: Icons.devices_rounded,
+              title: 'อุปกรณ์ที่เข้าสู่ระบบ',
+              subtitle: 'ดูเครื่องที่ใช้บัญชีนี้ และออกจากระบบเครื่องอื่น',
+              color: AppColors.sky,
+              onTap: () => Navigator.of(context)
+                  .push(MaterialPageRoute(builder: (_) => const DevicesPage())),
             ),
             buildActionRow(
               icon: Icons.logout_rounded,

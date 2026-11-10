@@ -51,6 +51,7 @@ import 'support_ticket_page.dart';
 import 'activity_detail_page.dart';
 import 'saved_posts_page.dart';
 import 'search_page.dart';
+import '../services/session_service.dart';
 
 // หน้าย่อยของแท็บ "หน้าหลัก"
 
@@ -370,6 +371,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   void setUpPush() {
     PushService.register();
+
+    // ชื่อรุ่นของเครื่องนี้ในหน้า "อุปกรณ์ที่เข้าสู่ระบบ" (เซสชันจากแอปเวอร์ชันเก่า)
+    SessionService.reportCurrentDevice();
 
     pushOpenedSubscription = PushService.onOpened.listen(
       (message) => openFromPush(message.data),

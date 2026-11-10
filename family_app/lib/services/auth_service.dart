@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import 'api_helper.dart';
 import 'app_log.dart';
+import 'device_info_service.dart';
 
 // =======================================================
 // เข้าสู่ระบบ / สมัคร / ตรวจเซสชันตอนเปิดแอป / ออกจากระบบ
@@ -63,6 +64,9 @@ class AuthService {
     required String password,
     required String passwordConfirmation,
   }) async {
+    // รุ่นเครื่อง / ระบบ / เวอร์ชันแอป (หน้า "อุปกรณ์ที่เข้าสู่ระบบ")
+    final Map<String, String> device = await DeviceInfoService.payload();
+
     final response = await ApiHelper.request(
       () => http.post(
         Uri.parse('$baseUrl/register'),
@@ -72,6 +76,7 @@ class AuthService {
           'email': email,
           'password': password,
           'password_confirmation': passwordConfirmation,
+          ...device,
         }),
       ),
     );
@@ -87,11 +92,13 @@ class AuthService {
     required String email,
     required String password,
   }) async {
+    final Map<String, String> device = await DeviceInfoService.payload();
+
     final response = await ApiHelper.request(
       () => http.post(
         Uri.parse('$baseUrl/login'),
         headers: _jsonHeaders,
-        body: jsonEncode({'email': email, 'password': password}),
+        body: jsonEncode({'email': email, 'password': password, ...device}),
       ),
     );
 
