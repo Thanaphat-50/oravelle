@@ -7,6 +7,7 @@ use App\Http\Controllers\AddressController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\FamilyController;
+use App\Http\Controllers\GroupChatController;
 use App\Http\Controllers\FamilyInvitationController;
 use App\Http\Controllers\FollowController;
 use App\Http\Controllers\HashtagController;
@@ -208,6 +209,18 @@ Route::middleware('auth:sanctum')->group(function () {
         PostController::class,
         'share'
     ])->middleware('throttle:ugc');
+
+    // แชทกลุ่มครอบครัว (GroupChatController) — สิทธิ์จากสมาชิกกลุ่มปัจจุบัน ตรวจทุกเส้นทาง
+    Route::middleware('throttle:group-chat')->group(function () {
+        Route::post('/group-chat/open', [GroupChatController::class, 'open']);
+        Route::get('/group-chats/{chat}/messages', [GroupChatController::class, 'messages'])->whereNumber('chat');
+        Route::get('/group-chats/{chat}/messages/{message}', [GroupChatController::class, 'show'])->whereNumber(['chat', 'message']);
+        Route::post('/group-chats/{chat}/read', [GroupChatController::class, 'read'])->whereNumber('chat');
+        Route::put('/group-chats/{chat}/mute', [GroupChatController::class, 'mute'])->whereNumber('chat');
+    });
+    Route::post('/group-chats/{chat}/messages', [GroupChatController::class, 'send'])
+        ->whereNumber('chat')
+        ->middleware('throttle:group-chat-send');
 
     // อุปกรณ์ที่เข้าสู่ระบบ (SessionController) — จัดการได้เฉพาะเซสชันของตัวเอง
     Route::middleware('throttle:sessions')->group(function () {
@@ -854,6 +867,12 @@ Route::middleware('auth:sanctum')->group(function () {
         ->whereNumber('ticket')
         ->middleware('throttle:support-message');
 });
+
+// รูปในแชทกลุ่ม: ลิงก์ชั่วคราวที่ลงลายเซ็น ผูกกับผู้ดู + ตรวจสิทธิ์ผู้ดูซ้ำทุกครั้ง
+Route::get('/group-chat-images/{message}', [GroupChatController::class, 'image'])
+    ->middleware(['signed', 'throttle:240,1'])
+    ->whereNumber('message')
+    ->name('group-chat.image');
 
 // รูปแนบในคำร้อง: ลิงก์ชั่วคราวที่ลงลายเซ็น (สร้างให้เฉพาะเจ้าของคำร้องและทีมงาน)
 Route::get('/support/files/{attachment}', [SupportTicketController::class, 'file'])

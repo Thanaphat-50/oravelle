@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\AppNotification;
 use App\Models\ChatMessage;
 use App\Models\Conversation;
+use App\Models\Family;
 use App\Models\FamilyMember;
+use App\Models\GroupChat;
 use App\Models\Order;
 use App\Models\Shop;
 use App\Models\User;
@@ -106,6 +108,8 @@ class ChatController extends Controller
             'status' => true,
             'conversations' => $rooms,
             'contacts' => $contacts,
+            // แชทกลุ่มครอบครัว (ดูรายการเฉย ๆ ไม่สร้างห้อง และไม่ทำให้อ่านแล้ว)
+            'group_chat' => $this->groupChatSummary($me),
         ]);
     }
 
@@ -131,9 +135,14 @@ class ChatController extends Controller
             })
             ->count();
 
+        // + แชทกลุ่ม (นับเฉพาะข้อความของคนอื่นที่เห็นได้ หลังตำแหน่งอ่านของเรา)
+        $group = $this->groupChatSummary($me);
+        $groupUnread = $group['unread_count'] ?? 0;
+
         return response()->json([
             'status' => true,
-            'unread_count' => $count,
+            'unread_count' => $count + $groupUnread,
+            'group_unread_count' => $groupUnread,
         ]);
     }
 
@@ -376,6 +385,38 @@ class ChatController extends Controller
     // =====================================================
     // Helpers
     // =====================================================
+
+    // ห้องแชทกลุ่มของกลุ่มที่อยู่ตอนนี้ (null = ยังไม่มีกลุ่ม / id null = ยังไม่มีใครเปิดห้อง)
+    private function groupChatSummary(User $me): ?array
+    {
+        $membership = FamilyMember::where('user_id', $me->id)->first();
+
+        if (!$membership) {
+            return null;
+        }
+
+        $chat = GroupChat::where('family_id', $membership->family_id)->first();
+        $access = $chat?->accessFor($me);
+
+        $last = $access
+            ? $access->visibleMessages()->with('sender:id,name')->orderByDesc('id')->first()
+            : null;
+
+        return [
+            'id' => $chat?->id,
+            'name' => Family::whereKey($membership->family_id)->value('name') ?? 'แชทกลุ่ม',
+            'members_count' => FamilyMember::where('family_id', $membership->family_id)->count(),
+            'unread_count' => $access?->unreadCount() ?? 0,
+            'muted' => $access?->muted ?? false,
+            'last_message' => $last ? [
+                'body' => $last->body ? Str::limit($last->body, 80) : null,
+                'has_image' => $last->image_path !== null,
+                'is_mine' => (int) $last->sender_id === (int) $me->id,
+                'sender_name' => $last->sender?->name,
+                'created_at' => $last->created_at?->toIso8601String(),
+            ] : null,
+        ];
+    }
 
     // คนในครอบครัวเดียวกับเรา (ไม่รวมตัวเอง)
     private function familyMemberIds(User $me)

@@ -19,6 +19,7 @@ import '../widgets/hashtag_text.dart';
 import '../widgets/photo_viewer.dart';
 import '../widgets/post_categories.dart';
 import '../widgets/share_sheet.dart';
+import 'group_chat_page.dart';
 import 'post_detail_page.dart';
 import 'post_edit_page.dart';
 import 'search_page.dart';
@@ -3122,6 +3123,13 @@ class _FeedPageState extends State<FeedPage> {
           ),
         ),
         const Spacer(),
+        // แชทกลุ่ม (ห้องเดียวของกลุ่ม)
+        IconButton(
+          tooltip: 'แชทกลุ่ม',
+          onPressed: () => Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const GroupChatPage())),
+          icon: Icon(Icons.forum_outlined, color: AppColors.primary),
+        ),
         // ค้นหาเฉพาะโพสต์ในกลุ่ม (แยกจากค้นหาชุมชน)
         IconButton(
           tooltip: 'ค้นหาในกลุ่ม',

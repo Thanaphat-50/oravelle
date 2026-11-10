@@ -7,6 +7,7 @@ import '../services/chat_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/user_avatar.dart';
 import 'chat_room_page.dart';
+import 'group_chat_page.dart';
 
 // =======================================================
 // รายการแชท
@@ -25,6 +26,9 @@ class _ChatListPageState extends State<ChatListPage> {
   List<Map<String, dynamic>> conversations = [];
 
   List<Map<String, dynamic>> contacts = [];
+
+  // แชทกลุ่มของกลุ่มที่อยู่ตอนนี้ (null = ยังไม่มีกลุ่ม)
+  Map<String, dynamic>? groupChat;
 
   bool isLoading = true;
 
@@ -64,6 +68,8 @@ class _ChatListPageState extends State<ChatListPage> {
         setState(() {
           conversations = parseList(result['conversations']);
           contacts = parseList(result['contacts']);
+          final dynamic group = result['group_chat'];
+          groupChat = group is Map ? Map<String, dynamic>.from(group) : null;
           loadError = null;
         });
       } else if (conversations.isEmpty) {
@@ -184,6 +190,114 @@ class _ChatListPageState extends State<ChatListPage> {
   // =====================================================
   // UI
   // =====================================================
+
+  // เปิดห้องแชทกลุ่ม (ยังไม่มีห้อง → เซิร์ฟเวอร์สร้างตอนเปิด)
+  Future<void> openGroupChat() async {
+    final dynamic id = groupChat?['id'];
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => GroupChatPage(chatId: id is num ? id.toInt() : null),
+      ),
+    );
+
+    if (mounted) loadChats();
+  }
+
+  Widget buildGroupChat(Map<String, dynamic> group) {
+    final dynamic unread = group['unread_count'];
+    final int count = unread is num ? unread.toInt() : 0;
+    final dynamic last = group['last_message'];
+
+    String preview = 'แชทพร้อมกันทุกคนในกลุ่ม';
+
+    if (last is Map) {
+      final String who = last['is_mine'] == true
+          ? 'คุณ'
+          : (last['sender_name']?.toString() ?? 'สมาชิก');
+      final String text =
+          last['body']?.toString() ??
+          (last['has_image'] == true ? '📷 รูปภาพ' : '');
+      preview = '$who: $text';
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: AppDecorations.card(radius: 22),
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        onTap: openGroupChat,
+        contentPadding: const EdgeInsets.fromLTRB(16, 8, 14, 8),
+        leading: CircleAvatar(
+          radius: 24,
+          backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+          child: Icon(Icons.groups_rounded, color: AppColors.primary),
+        ),
+        title: Row(
+          children: [
+            Flexible(
+              child: Text(
+                group['name']?.toString() ?? 'แชทกลุ่ม',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.navy,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(99),
+              ),
+              child: Text(
+                'กลุ่ม',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            if (group['muted'] == true) ...[
+              const SizedBox(width: 4),
+              Icon(
+                Icons.notifications_off_outlined,
+                size: 16,
+                color: AppColors.muted,
+              ),
+            ],
+          ],
+        ),
+        subtitle: Text(
+          preview,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: AppColors.muted, fontSize: 13),
+        ),
+        trailing: count > 0
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.danger,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  count > 99 ? '99+' : '$count',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              )
+            : null,
+      ),
+    );
+  }
 
   Widget buildSectionTitle(String title) {
     return Padding(
@@ -425,6 +539,10 @@ class _ChatListPageState extends State<ChatListPage> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(bottom: 24),
         children: [
+          if (groupChat != null) ...[
+            buildSectionTitle('แชทกลุ่ม'),
+            buildGroupChat(groupChat!),
+          ],
           buildSectionTitle('สมาชิกในกลุ่ม'),
           buildContacts(),
           buildSectionTitle('ข้อความ'),

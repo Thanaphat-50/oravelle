@@ -7,6 +7,8 @@ use App\Models\AppNotification;
 use App\Models\Comment;
 use App\Models\Family;
 use App\Models\FamilyMember;
+use App\Models\GroupChat;
+use App\Models\GroupChatMessage;
 use App\Models\Conversation;
 use App\Models\Post;
 use App\Models\PostImage;
@@ -107,6 +109,18 @@ class AccountDeletionService
         // รูปในห้องแชทของผู้ใช้ (ห้องถูกลบตาม cascade)
         $chatMediaPaths = Conversation::mediaPathsOf($user->id);
 
+        // แชทกลุ่ม: ข้อความของผู้ใช้ (ลบตาม cascade) + ห้องของกลุ่มที่ผู้ใช้เป็นเจ้าของ (ถูกลบทั้งห้อง)
+        $groupChatPaths = GroupChatMessage::whereNotNull('image_path')
+            ->where(function ($messages) use ($user) {
+                $messages->where('sender_id', $user->id)
+                    ->orWhereIn('group_chat_id', GroupChat::whereIn(
+                        'family_id',
+                        Family::where('owner_id', $user->id)->select('id')
+                    )->select('id'));
+            })
+            ->pluck('image_path')
+            ->all();
+
         // รูปแนบในคำร้องศูนย์ช่วยเหลือของผู้ใช้ (คำร้อง/ข้อความ/บันทึกภายในถูกลบตาม cascade)
         $supportPaths = SupportAttachment::whereIn(
             'ticket_id',
@@ -134,6 +148,9 @@ class AccountDeletionService
 
         // ไฟล์แนบคำร้องอยู่ใน disk ส่วนตัวของศูนย์ช่วยเหลือ
         SupportAttachment::deleteFiles($supportPaths);
+
+        // รูปในแชทกลุ่มอยู่ใน disk ส่วนตัว
+        GroupChatMessage::deleteFiles($groupChatPaths);
 
         // ลบรูปโปรไฟล์หลังลบข้อมูลสำเร็จแล้ว
         if ($photoPath) {

@@ -8,6 +8,8 @@ use App\Models\AppNotification;
 use App\Models\Family;
 use App\Models\FamilyInvitation;
 use App\Models\FamilyMember;
+use App\Models\GroupChat;
+use App\Models\GroupChatMessage;
 use App\Models\Post;
 use App\Models\User;
 use App\Models\UserLocation;
@@ -753,6 +755,12 @@ class FamilyController extends Controller
             Post::where('family_id', $family->id)->select('id')
         );
 
+        // รูปในแชทกลุ่ม (ห้อง/ข้อความ/สิทธิ์ถูกลบตาม cascade → ใช้ห้องไม่ได้ทันที)
+        $groupChatImages = GroupChatMessage::whereIn(
+            'group_chat_id',
+            GroupChat::where('family_id', $family->id)->select('id')
+        )->whereNotNull('image_path')->pluck('image_path')->all();
+
         DB::transaction(function () use (
             $family
         ) {
@@ -881,6 +889,9 @@ class FamilyController extends Controller
         // ลบไฟล์ของโพสต์ที่ถูกลบไปแล้ว
         // (แถวในตารางถูกลบตาม cascade แต่ไฟล์ต้องลบเอง)
         MediaStorage::delete($imagePaths);
+
+        // รูปในแชทกลุ่มอยู่ใน disk ส่วนตัว
+        GroupChatMessage::deleteFiles($groupChatImages);
 
         return response()->json([
             'status' =>

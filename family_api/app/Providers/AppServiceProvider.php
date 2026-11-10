@@ -129,6 +129,26 @@ class AppServiceProvider extends ServiceProvider
                 ->response($this->tooManyAttempts(...));
         });
 
+        // แชทกลุ่ม: ส่งข้อความ 30 ครั้ง/นาที / รูป 10 รูป/นาที และ 60 รูป/ชั่วโมง ต่อคน
+        RateLimiter::for('group-chat-send', function (Request $request) {
+            $id = $request->user()?->id ?? $request->ip();
+
+            return [
+                Limit::perMinute(30)->by('group-chat-send:' . $id)->response($this->tooManyAttempts(...)),
+                ...($request->hasFile('image') ? [
+                    Limit::perMinute(10)->by('group-chat-image:' . $id)->response($this->tooManyAttempts(...)),
+                    Limit::perHour(60)->by('group-chat-image-hour:' . $id)->response($this->tooManyAttempts(...)),
+                ] : []),
+            ];
+        });
+
+        // แชทกลุ่ม: เปิดห้อง / ดึงข้อความใหม่ (ทุก 4 วินาทีขณะเปิดห้อง) / อ่านแล้ว / ปิดเสียง
+        RateLimiter::for('group-chat', function (Request $request) {
+            return Limit::perMinute(120)
+                ->by('group-chat:' . ($request->user()?->id ?? $request->ip()))
+                ->response($this->tooManyAttempts(...));
+        });
+
         // แชท: คุยกันถี่กว่าโพสต์ได้
         RateLimiter::for('chat', function (Request $request) {
             return Limit::perMinute(60)

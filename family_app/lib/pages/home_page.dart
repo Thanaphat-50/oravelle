@@ -51,6 +51,8 @@ import 'support_ticket_page.dart';
 import 'activity_detail_page.dart';
 import 'saved_posts_page.dart';
 import 'search_page.dart';
+import 'group_chat_page.dart';
+import '../services/group_chat_service.dart';
 import '../services/session_service.dart';
 
 // หน้าย่อยของแท็บ "หน้าหลัก"
@@ -400,6 +402,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return;
     }
 
+    // กำลังเปิดห้องแชทกลุ่มนั้นอยู่ → ข้อความขึ้นในห้องเองแล้ว
+    if (message.data['type'] == 'group_message' &&
+        message.data['group_chat_id']?.toString() ==
+            GroupChatService.activeChatId?.toString()) {
+      return;
+    }
+
     final String text =
         message.notification?.body ?? message.notification?.title ?? '';
 
@@ -437,6 +446,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final NavigatorState navigator = Navigator.of(context);
 
     switch (type) {
+      // แชทกลุ่ม → ห้องนั้น (เซิร์ฟเวอร์ตรวจสิทธิ์ / หมดสิทธิ์ → ข้อความแจ้ง ไม่แสดงประวัติ)
+      case 'group_message':
+        final int? groupChatId = int.tryParse(
+          '${data['group_chat_id'] ?? ''}',
+        );
+
+        if (groupChatId != null) {
+          await navigator.push(
+            MaterialPageRoute(
+              builder: (_) => GroupChatPage(chatId: groupChatId),
+            ),
+          );
+          ChatService.refreshUnreadCount();
+          return;
+        }
+
       case 'new_message':
         final int? conversationId = int.tryParse(
           '${data['conversation_id'] ?? ''}',
