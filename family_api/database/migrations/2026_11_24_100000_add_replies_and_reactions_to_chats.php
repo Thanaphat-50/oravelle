@@ -53,7 +53,15 @@ return new class extends Migration
                 $table->string('emoji', 16);
                 $table->timestamps();
 
-                $table->unique(['group_chat_message_id', 'user_id']);
+                // ชื่อสั้น: ชื่ออัตโนมัติยาว 65 ตัวอักษร เกินที่ MySQL รับ (64)
+                $table->unique(['group_chat_message_id', 'user_id'], 'gcm_reactions_message_user_unique');
+            });
+        }
+
+        // รอบ deploy ที่ล้มบน MySQL สร้างตารางแล้วแต่ยังไม่มี unique → เติมให้ (รันซ้ำได้)
+        if (!Schema::hasIndex('group_chat_message_reactions', 'gcm_reactions_message_user_unique')) {
+            Schema::table('group_chat_message_reactions', function (Blueprint $table) {
+                $table->unique(['group_chat_message_id', 'user_id'], 'gcm_reactions_message_user_unique');
             });
         }
     }
