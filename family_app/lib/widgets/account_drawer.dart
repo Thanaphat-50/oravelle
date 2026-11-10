@@ -15,6 +15,7 @@ import 'user_avatar.dart';
 enum AccountMenuItem {
   profile,
   history,
+  savedPosts,
   family,
   notifications,
   orders,
@@ -305,6 +306,11 @@ class _AccountDrawerState extends State<AccountDrawer> {
                       icon: Icons.history_rounded,
                       title: 'ประวัติการใช้งาน',
                       subtitle: 'ถูกใจ ความคิดเห็น แชร์ และการติดตาม',
+                    ),
+                    buildItem(
+                      item: AccountMenuItem.savedPosts,
+                      icon: Icons.bookmark_border_rounded,
+                      title: 'โพสต์ที่บันทึก',
                     ),
                     buildItem(
                       item: AccountMenuItem.notifications,

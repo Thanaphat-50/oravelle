@@ -49,6 +49,7 @@ import 'video_feed_page.dart';
 import 'support_center_page.dart';
 import 'support_ticket_page.dart';
 import 'activity_detail_page.dart';
+import 'saved_posts_page.dart';
 import 'search_page.dart';
 
 // หน้าย่อยของแท็บ "หน้าหลัก"
@@ -1276,6 +1277,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       case AccountMenuItem.history:
         await navigator.push(
           MaterialPageRoute(builder: (_) => const HistoryPage()),
+        );
+
+      case AccountMenuItem.savedPosts:
+        await navigator.push(
+          MaterialPageRoute(builder: (_) => const SavedPostsPage()),
         );
 
       case AccountMenuItem.family:

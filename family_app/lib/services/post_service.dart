@@ -451,6 +451,54 @@ class PostService {
     return ApiHelper.decode(response);
   }
 
+  // =====================================================
+  // บันทึกโพสต์ไว้อ่าน (ส่วนตัว)
+  // บันทึก = PUT / ยกเลิก = DELETE (ส่งซ้ำได้ ผลเหมือนเดิม ไม่ใช่สลับสถานะ)
+  // =====================================================
+
+  static Future<Map<String, dynamic>> savePost(int postId) async {
+    final headers = await _headers();
+
+    final response = await ApiHelper.request(
+      () =>
+          http.put(Uri.parse('$baseUrl/posts/$postId/save'), headers: headers),
+    );
+
+    return ApiHelper.decode(response);
+  }
+
+  static Future<Map<String, dynamic>> unsavePost(int postId) async {
+    final headers = await _headers();
+
+    final response = await ApiHelper.request(
+      () => http.delete(
+        Uri.parse('$baseUrl/posts/$postId/save'),
+        headers: headers,
+      ),
+    );
+
+    // โพสต์ถูกลบไปแล้ว → รายการบันทึกหายไปด้วยแล้ว
+    if (response.statusCode == 404) {
+      return {'status': true, 'saved': false};
+    }
+
+    return ApiHelper.decode(response);
+  }
+
+  // รายการที่บันทึก ล่าสุดก่อน (cursor = next_cursor ของหน้าก่อน)
+  static Future<Map<String, dynamic>> savedPosts({String? cursor}) async {
+    final headers = await _headers();
+
+    final Uri uri = Uri.parse('$baseUrl/saved-posts')
+        .replace(queryParameters: {'cursor': ?cursor});
+
+    final response = await ApiHelper.request(
+      () => http.get(uri, headers: headers),
+    );
+
+    return ApiHelper.decode(response);
+  }
+
   static Future<Map<String, dynamic>> deletePost(int postId) async {
     final headers = await _headers();
 

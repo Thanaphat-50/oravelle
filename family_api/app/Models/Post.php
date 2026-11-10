@@ -136,6 +136,27 @@ class Post extends Model
     }
 
     // แฮชแท็กในข้อความ (#ทำอาหาร)
+    // ใครบันทึกโพสต์นี้ (ใช้ตรวจ saved_by_me ของผู้ใช้คนเดียว ไม่ส่งรายชื่อให้แอป)
+    public function saves()
+    {
+        return $this->hasMany(SavedPost::class);
+    }
+
+    // โพสต์ที่ $viewer เห็นได้ตอนนี้: ชุมชน (กติกาเดียวกับฟีด) หรือโพสต์กลุ่มของกลุ่มที่อยู่ตอนนี้
+    // ใช้ตรวจตอนบันทึก / แสดงรายการที่บันทึก
+    public function scopeVisibleTo($query, User $viewer, ?int $viewerFamilyId, $blockedIds = null)
+    {
+        return $query->where(function ($posts) use ($viewer, $viewerFamilyId, $blockedIds) {
+            $posts->where(fn ($community) => $community->visibleInCommunityTo($viewer, $blockedIds));
+
+            if ($viewerFamilyId) {
+                $posts->orWhere(fn ($family) => $family
+                    ->where('visibility', 'family')
+                    ->where('family_id', $viewerFamilyId));
+            }
+        });
+    }
+
     public function hashtags()
     {
         return $this->belongsToMany(Hashtag::class);

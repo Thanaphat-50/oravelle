@@ -25,6 +25,7 @@ use App\Http\Controllers\MyPromotionController;
 use App\Http\Controllers\ShopReviewController;
 use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SavedPostController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SocialAuthController;
@@ -168,6 +169,11 @@ Route::middleware('auth:sanctum')->group(function () {
         PostController::class,
         'destroy'
     ]);
+
+    // บันทึกโพสต์ไว้อ่าน (ส่วนตัว) — บันทึก/ยกเลิกส่งซ้ำได้ ผลเหมือนเดิม
+    Route::get('/saved-posts', [SavedPostController::class, 'index']);
+    Route::put('/posts/{post}/save', [SavedPostController::class, 'store'])->middleware('throttle:60,1');
+    Route::delete('/posts/{post}/save', [SavedPostController::class, 'destroy'])->middleware('throttle:60,1');
 
     // แก้ไขข้อความโพสต์ของตัวเอง
     Route::patch('/posts/{post}', [

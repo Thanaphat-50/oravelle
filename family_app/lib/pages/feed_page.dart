@@ -108,6 +108,9 @@ class FeedPage extends StatefulWidget {
   final String? searchQuery;
   final String searchScope;
 
+  // หน้า "โพสต์ที่บันทึก": รายการที่บันทึกไว้ (ล่าสุดก่อน) ยกเลิกบันทึกแล้วหายจากรายการ
+  final bool savedOnly;
+
   const FeedPage({
     super.key,
     required this.scope,
@@ -124,6 +127,7 @@ class FeedPage extends StatefulWidget {
     this.mineVisibility,
     this.searchQuery,
     this.searchScope = 'community',
+    this.savedOnly = false,
   });
 
   @override
@@ -203,18 +207,23 @@ class _FeedPageState extends State<FeedPage> {
 
   bool get isSearchFeed => widget.searchQuery != null;
 
+  bool get isSavedFeed => widget.savedOnly;
+
+  // ผลค้นหา / โพสต์ที่บันทึก: แบ่งหน้าแบบ cursor และแตะการ์ดเพื่อเปิดโพสต์
+  bool get isListFeed => isSearchFeed || isSavedFeed;
+
   // ฟีดหลักที่เขียนโพสต์ได้ (ชุมชน / ครอบครัว)
   bool get isMainFeed =>
       !isSinglePost &&
       !isAuthorFeed &&
       !isHashtagFeed &&
-      !isSearchFeed &&
+      !isListFeed &&
       scope != FeedScope.mine;
 
   // ฟีดที่โหลดทีละหน้า
   bool get isPaged =>
       !isSinglePost &&
-      (isSearchFeed || scope == FeedScope.community || scope == FeedScope.mine);
+      (isListFeed || scope == FeedScope.community || scope == FeedScope.mine);
 
   final _ScopeFeed feed = _ScopeFeed();
 
@@ -287,7 +296,15 @@ class _FeedPageState extends State<FeedPage> {
     if (categoryFromParent) filterCategory = widget.category;
     scrollController.addListener(onScroll);
     postChanges = PostEvents.changes.listen((change) {
-      if (PostEvents.apply(feed.posts, change) && mounted) setState(() {});
+      bool touched = PostEvents.apply(feed.posts, change);
+
+      // หน้าโพสต์ที่บันทึก: ยกเลิกบันทึกสำเร็จ (จากหน้าไหนก็ได้) → เอาออกจากรายการ
+      if (isSavedFeed && change.fields['saved_confirmed'] == false) {
+        feed.posts.removeWhere((post) => postIdOf(post) == change.postId);
+        touched = true;
+      }
+
+      if (touched && mounted) setState(() {});
     });
     loadPosts();
 
@@ -344,6 +361,8 @@ class _FeedPageState extends State<FeedPage> {
               scope: widget.searchScope,
               cursor: loadMore ? state.cursor : null,
             )
+          : isSavedFeed
+          ? await PostService.savedPosts(cursor: loadMore ? state.cursor : null)
           : await PostService.getPosts(
               scope: isAuthorFeed ? 'user' : apiScope(scope),
               page: page,
@@ -1238,6 +1257,51 @@ class _FeedPageState extends State<FeedPage> {
   // =====================================================
   // ลบโพสต์
   // =====================================================
+
+  // โพสต์ที่กำลังบันทึก/ยกเลิก (กันกดซ้ำ)
+  final Set<int> savingPostIds = {};
+
+  // บันทึก / ยกเลิกบันทึก: แสดงผลทันทีทุกหน้า (PostEvents) ไม่สำเร็จ → คืนสถานะเดิม + แจ้ง
+  Future<void> toggleSave(Map<String, dynamic> post, int postId) async {
+    if (savingPostIds.contains(postId)) return;
+
+    final bool wasSaved = post['saved_by_me'] == true;
+
+    savingPostIds.add(postId);
+    PostEvents.emit(postId, {'saved_by_me': !wasSaved});
+
+    try {
+      final result = wasSaved
+          ? await PostService.unsavePost(postId)
+          : await PostService.savePost(postId);
+
+      if (result['status'] != true) {
+        throw Exception(result['message'] ?? 'ทำรายการไม่สำเร็จ');
+      }
+
+      PostEvents.emit(postId, {
+        'saved_by_me': !wasSaved,
+        'saved_confirmed': !wasSaved,
+      });
+
+      if (mounted) {
+        showMessage(wasSaved ? 'ยกเลิกบันทึกแล้ว' : 'บันทึกโพสต์แล้ว');
+      }
+    } catch (e) {
+      PostEvents.emit(postId, {'saved_by_me': wasSaved});
+
+      if (mounted) {
+        final String text = e.toString().replaceFirst('Exception: ', '');
+        showMessage(
+          text.isEmpty
+              ? (wasSaved ? 'ยกเลิกบันทึกไม่สำเร็จ' : 'บันทึกโพสต์ไม่สำเร็จ')
+              : text,
+        );
+      }
+    } finally {
+      savingPostIds.remove(postId);
+    }
+  }
 
   // แก้ไขข้อความโพสต์ของตัวเอง → ทุกหน้าที่แสดงโพสต์นี้อัปเดตตาม (PostEvents)
   // หน้านี้ยังเปิดอยู่ข้างหลัง → ตำแหน่งเลื่อนและคำค้นเดิม
@@ -3361,7 +3425,7 @@ class _FeedPageState extends State<FeedPage> {
 
   // หน้าค้นหา: แตะการ์ด → เปิดโพสต์ (ตรวจสิทธิ์ใหม่ตอนเปิด) / ฟีดอื่นไม่เปลี่ยน
   Widget openPostOnTap(int? postId, Widget card) {
-    if (!isSearchFeed || postId == null) return card;
+    if (!isListFeed || postId == null) return card;
 
     return GestureDetector(
       key: ValueKey('search-post-$postId'),
@@ -3513,7 +3577,8 @@ class _FeedPageState extends State<FeedPage> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           ),
                         )
-                      else if (postId != null && (mine || community))
+                      // ทุกโพสต์ที่เห็นได้มีเมนู (บันทึกโพสต์) / รายงาน-บล็อกเฉพาะชุมชน
+                      else if (postId != null)
                         buildPostMenu(post, postId, mine)
                       else
                         const SizedBox(width: 12, height: 48),
@@ -3837,6 +3902,8 @@ class _FeedPageState extends State<FeedPage> {
             toggleMapStatus(post, postId);
           case 'edit':
             editPost(post);
+          case 'save':
+            toggleSave(post, postId);
           case 'delete':
             confirmDeletePost(postId);
           case 'report':
@@ -3848,7 +3915,17 @@ class _FeedPageState extends State<FeedPage> {
         }
       },
       itemBuilder: (context) {
+        final bool saved = post['saved_by_me'] == true;
+
         return [
+          buildMenuItem(
+            value: 'save',
+            icon: saved
+                ? Icons.bookmark_remove_outlined
+                : Icons.bookmark_add_outlined,
+            label: saved ? 'ยกเลิกบันทึก' : 'บันทึกโพสต์',
+            color: AppColors.navy,
+          ),
           if (canMap)
             buildMenuItem(
               value: 'map',
@@ -3873,14 +3950,14 @@ class _FeedPageState extends State<FeedPage> {
               label: 'ลบโพสต์',
               color: AppColors.danger,
             ),
-          if (!mine)
+          if (!mine && isCommunityPost(post))
             buildMenuItem(
               value: 'report',
               icon: Icons.flag_outlined,
               label: 'รายงานโพสต์',
               color: AppColors.navy,
             ),
-          if (!mine && authorId != null)
+          if (!mine && authorId != null && isCommunityPost(post))
             buildMenuItem(
               value: 'block',
               icon: Icons.block_rounded,
@@ -4258,6 +4335,15 @@ class _FeedPageState extends State<FeedPage> {
           message: 'โพสต์ที่คุณแชร์ทั้งในกลุ่มและชุมชนจะแสดงที่นี่',
         ),
       };
+    }
+
+    if (isSavedFeed) {
+      return buildStateCard(
+        icon: Icons.bookmark_border_rounded,
+        color: AppColors.primary,
+        title: 'ยังไม่มีโพสต์ที่บันทึก',
+        message: 'กด ⋯ บนโพสต์ แล้วเลือก "บันทึกโพสต์" เพื่อเก็บไว้อ่านทีหลัง',
+      );
     }
 
     if (isSearchFeed) {

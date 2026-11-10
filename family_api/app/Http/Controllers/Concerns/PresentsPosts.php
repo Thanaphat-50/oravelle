@@ -56,6 +56,8 @@ trait PresentsPosts
         return $query->withCount(['likes', 'shares'])
             ->withExists([
                 'likes as liked_by_me' => fn ($likes) => $likes->where('user_id', $user->id),
+                // บันทึกไว้แล้วหรือยัง (เฉพาะของเราเอง)
+                'saves as saved_by_me' => fn ($saves) => $saves->where('user_id', $user->id),
             ]);
     }
 
