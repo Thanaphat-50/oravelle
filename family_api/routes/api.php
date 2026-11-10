@@ -216,6 +216,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/group-chats/{chat}/messages', [GroupChatController::class, 'messages'])->whereNumber('chat');
         Route::get('/group-chats/{chat}/messages/{message}', [GroupChatController::class, 'show'])->whereNumber(['chat', 'message']);
         Route::post('/group-chats/{chat}/read', [GroupChatController::class, 'read'])->whereNumber('chat');
+        Route::put('/group-chats/{chat}/messages/{message}/reaction', [GroupChatController::class, 'react'])->whereNumber(['chat', 'message']);
+        Route::delete('/group-chats/{chat}/messages/{message}/reaction', [GroupChatController::class, 'unreact'])->whereNumber(['chat', 'message']);
         Route::put('/group-chats/{chat}/mute', [GroupChatController::class, 'mute'])->whereNumber('chat');
     });
     Route::post('/group-chats/{chat}/messages', [GroupChatController::class, 'send'])
@@ -331,6 +333,15 @@ Route::middleware('auth:sanctum')->group(function () {
         ChatController::class,
         'messages'
     ]);
+
+    Route::put('/chats/{conversation}/messages/{message}/reaction', [ChatController::class, 'react'])
+        ->middleware('throttle:chat');
+
+    Route::delete('/chats/{conversation}/messages/{message}/reaction', [ChatController::class, 'unreact'])
+        ->middleware('throttle:chat');
+
+    Route::post('/chats/{conversation}/read', [ChatController::class, 'read'])
+        ->middleware('throttle:chat');
 
     Route::post('/chats/{conversation}/messages', [
         ChatController::class,

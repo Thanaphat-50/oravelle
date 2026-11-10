@@ -15,6 +15,9 @@ class ChatMessage extends Model
         'client_id',
         'body',
         'image_path',
+        // ตอบกลับข้อความ (ห้องเดียวกันเท่านั้น)
+        'reply_to_id',
+        'is_reply',
     ];
 
     protected $hidden = [
@@ -23,6 +26,10 @@ class ChatMessage extends Model
 
     protected $appends = [
         'image_url',
+    ];
+
+    protected $casts = [
+        'is_reply' => 'boolean',
     ];
 
     public function conversation()

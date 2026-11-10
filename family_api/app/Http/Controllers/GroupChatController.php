@@ -7,7 +7,11 @@ use App\Models\FamilyMember;
 use App\Models\GroupChat;
 use App\Models\GroupChatMember;
 use App\Models\GroupChatMessage;
+use App\Models\GroupChatMessageReaction;
 use App\Models\User;
+use App\Support\ChatExtras;
+use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -69,6 +73,8 @@ class GroupChatController extends Controller
         $data = $request->validate([
             'before_id' => 'nullable|integer|min:1',
             'after_id' => 'nullable|integer|min:0',
+            // สถานะ (Reaction / อ่านแล้ว X คน) ของข้อความที่โหลดไว้แล้ว id >= ค่านี้ ถึง after_id (ไม่เกิน 100)
+            'states_from' => 'nullable|integer|min:1',
         ]);
 
         $me = $request->user();
@@ -103,12 +109,15 @@ class GroupChatController extends Controller
             $items = $items->take(self::PAGE_SIZE)->reverse();
         }
 
+        $extras = $this->extrasFor($items, $access, $me);
+
         return response()->json([
             'status' => true,
             'room' => $this->roomPayload($chat, $access),
-            'messages' => $items->map(fn (GroupChatMessage $message) => $this->messagePayload($message, $me))->values(),
+            'messages' => $items->map(fn (GroupChatMessage $message) => $this->messagePayload($message, $me, $extras))->values(),
             'has_more' => $hasMore,
             'has_newer' => $hasNewer,
+            'states' => $this->states($chat, $access, $me, $data),
         ]);
     }
 
@@ -123,7 +132,11 @@ class GroupChatController extends Controller
 
         return response()->json([
             'status' => true,
-            'message' => $this->messagePayload($message->load('sender:id,name,profile_photo'), $me),
+            'message' => $this->messagePayload(
+                $message->load('sender:id,name,profile_photo'),
+                $me,
+                $this->extrasFor(collect([$message]), $access, $me)
+            ),
         ]);
     }
 
@@ -139,6 +152,7 @@ class GroupChatController extends Controller
             'body' => 'required_without:image|nullable|string|max:' . self::MAX_BODY,
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:' . self::MAX_IMAGE_KB,
             'client_id' => 'required|string|max:64',
+            'reply_to_id' => 'nullable|integer|min:1',
         ], [
             'body.required_without' => 'กรุณาพิมพ์ข้อความหรือแนบรูป',
             'body.max' => 'ข้อความยาวได้ไม่เกิน 2,000 ตัวอักษร',
@@ -155,6 +169,23 @@ class GroupChatController extends Controller
             return $this->sentResponse($sent, $me, 200);
         }
 
+        // ตอบกลับได้เฉพาะข้อความในห้องเดียวกันที่ผู้ส่งเห็นได้ (ขอบเขตรอบสมาชิกของผู้ส่ง)
+        $replyTo = null;
+
+        if (isset($data['reply_to_id'])) {
+            $senderAccess = $chat->accessFor($me);
+            $replyTo = GroupChatMessage::where('group_chat_id', $chat->id)->whereKey($data['reply_to_id'])->first();
+
+            if (!$replyTo || !$senderAccess || !$this->canSee($senderAccess, $replyTo)) {
+                return response()->json([
+                    'status' => false,
+                    'code' => 'reply_unavailable',
+                    'message' => 'ข้อความที่ต้องการตอบกลับไม่พร้อมใช้งานแล้ว',
+                    'errors' => ['reply_to_id' => ['ข้อความที่ต้องการตอบกลับไม่พร้อมใช้งานแล้ว']],
+                ], 422);
+            }
+        }
+
         if ($body === '' && !$request->hasFile('image')) {
             return response()->json([
                 'status' => false,
@@ -167,7 +198,7 @@ class GroupChatController extends Controller
             : null;
 
         try {
-            $message = DB::transaction(function () use ($chat, $me, $body, $imagePath, $data) {
+            $message = DB::transaction(function () use ($chat, $me, $body, $imagePath, $data, $replyTo) {
                 // ล็อกแถวสมาชิกรอบนี้: ถูกนำออกพร้อมกัน → ฝั่งที่ลบรอ หรือเราเห็นว่าหมดสิทธิ์แล้ว
                 // (ไม่รับข้อความหลังหมดสิทธิ์ตามลำดับธุรกรรม)
                 $membership = FamilyMember::where('user_id', $me->id)
@@ -189,6 +220,8 @@ class GroupChatController extends Controller
                     'client_id' => $data['client_id'],
                     'body' => $body === '' ? null : $body,
                     'image_path' => $imagePath,
+                    'reply_to_id' => $replyTo?->id,
+                    'is_reply' => $replyTo !== null,
                 ]);
 
                 $chat->forceFill(['last_message_at' => $message->created_at])->save();
@@ -296,8 +329,117 @@ class GroupChatController extends Controller
     }
 
     // =====================================================
+    // PUT    /api/group-chats/{chat}/messages/{message}/reaction {emoji}  ตั้ง (ส่งซ้ำได้)
+    // DELETE /api/group-chats/{chat}/messages/{message}/reaction          ถอน (ส่งซ้ำได้)
+    // สมาชิกปัจจุบันที่เห็นข้อความนั้นเท่านั้น / ไม่นับ unread / ไม่ส่งแจ้งเตือน
+    // =====================================================
+
+    public function react(Request $request, GroupChat $chat, GroupChatMessage $message)
+    {
+        $me = $request->user();
+        $access = $chat->accessFor($me);
+
+        if (!$access || !$this->canSee($access, $message)) {
+            return $this->noAccess('ไม่พบข้อความนี้ หรือคุณไม่มีสิทธิ์ดูแล้ว');
+        }
+
+        $data = $request->validate(['emoji' => ['required', Rule::in(ChatExtras::EMOJIS)]]);
+
+        try {
+            GroupChatMessageReaction::updateOrCreate(
+                ['group_chat_message_id' => $message->id, 'user_id' => $me->id],
+                ['emoji' => $data['emoji']]
+            );
+        } catch (UniqueConstraintViolationException) {
+            GroupChatMessageReaction::where('group_chat_message_id', $message->id)->where('user_id', $me->id)->update(['emoji' => $data['emoji']]);
+        }
+
+        return $this->reactionsResponse($message, $me);
+    }
+
+    public function unreact(Request $request, GroupChat $chat, GroupChatMessage $message)
+    {
+        $me = $request->user();
+        $access = $chat->accessFor($me);
+
+        if (!$access || !$this->canSee($access, $message)) {
+            return $this->noAccess('ไม่พบข้อความนี้ หรือคุณไม่มีสิทธิ์ดูแล้ว');
+        }
+
+        GroupChatMessageReaction::where('group_chat_message_id', $message->id)->where('user_id', $me->id)->delete();
+
+        return $this->reactionsResponse($message, $me);
+    }
+
+    private function reactionsResponse(GroupChatMessage $message, User $me)
+    {
+        return response()->json([
+            'status' => true,
+            'message_id' => $message->id,
+            'reactions' => ChatExtras::summarize(
+                GroupChatMessageReaction::where('group_chat_message_id', $message->id)->get(['user_id', 'emoji']),
+                $me
+            ),
+        ]);
+    }
+
+    // =====================================================
     // Helpers
     // =====================================================
+
+    // Reply / Reaction / ผู้อ่าน ของข้อความชุดนี้ (โหลดรวดเดียว)
+    // ต้นทางของ Reply: ผู้ชมต้องเห็นได้ (ห้องเดียวกัน + หลังเข้ากลุ่มรอบนี้) ไม่งั้น "ไม่พร้อมใช้งาน"
+    private function extrasFor(Collection $messages, ?GroupChatMember $access, User $me): array
+    {
+        $extras = ChatExtras::prepare(
+            $messages,
+            GroupChatMessage::class,
+            GroupChatMessageReaction::class,
+            'group_chat_message_id',
+            $me,
+            fn (GroupChatMessage $source) => $access !== null && $this->canSee($access, $source)
+        );
+
+        // สมาชิกรอบปัจจุบันเท่านั้น (ออก/ถูกนำออก → แถวถูกลบ ไม่ถูกนับ)
+        $extras['members'] = $access && $messages->contains(fn ($message) => (int) $message->sender_id === (int) $me->id)
+            ? GroupChatMember::where('group_chat_id', $access->group_chat_id)->get(['user_id', 'last_read_id', 'visible_after_id'])
+            : collect();
+
+        return $extras;
+    }
+
+    // อ่านแล้ว X คน: สมาชิกปัจจุบัน (ไม่นับผู้ส่ง) ที่เห็นข้อความนี้ได้ และอ่านถึงข้อความนี้แล้ว
+    private function readCount(GroupChatMessage $message, Collection $members): int
+    {
+        return $members
+            ->filter(fn (GroupChatMember $member) => (int) $member->user_id !== (int) $message->sender_id
+                && $member->visible_after_id < $message->id
+                && $member->last_read_id >= $message->id)
+            ->count();
+    }
+
+    // สถานะของข้อความที่โหลดไว้แล้ว (ตอนดึงข้อความใหม่) — ชุดเดียว ไม่ยิงทีละข้อความ
+    private function states(GroupChat $chat, GroupChatMember $access, User $me, array $data): array
+    {
+        if (!isset($data['states_from'], $data['after_id'])) {
+            return [];
+        }
+
+        $messages = $access->visibleMessages()
+            ->where('id', '>=', $data['states_from'])
+            ->where('id', '<=', $data['after_id'])
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get(['id', 'group_chat_id', 'sender_id']);
+
+        $extras = $this->extrasFor($messages, $access, $me);
+
+        return $messages->map(fn (GroupChatMessage $message) => [
+            'id' => $message->id,
+            'reactions' => ChatExtras::reactionsPayload($message, $extras),
+            'read_count' => (int) $message->sender_id === (int) $me->id ? $this->readCount($message, $extras['members']) : null,
+        ])->values()->all();
+    }
 
     private function canSee(GroupChatMember $access, GroupChatMessage $message): bool
     {
@@ -337,12 +479,18 @@ class GroupChatController extends Controller
     }
 
     // ผู้ส่ง: id ชื่อ รูป เท่านั้น (ไม่มีอีเมล เบอร์โทร หรือข้อมูลบัญชี)
-    private function messagePayload(GroupChatMessage $message, User $me): array
+    private function messagePayload(GroupChatMessage $message, User $me, ?array $extras = null): array
     {
         $mine = (int) $message->sender_id === (int) $me->id;
         $sender = $message->sender;
 
+        $extras ??= $this->extrasFor(collect([$message]), $message->chat?->accessFor($me), $me);
+
         return [
+            'reply_to' => ChatExtras::replyPayload($message, $extras),
+            'reactions' => ChatExtras::reactionsPayload($message, $extras),
+            // ส่งแล้ว (บันทึกบนเซิร์ฟเวอร์) + อ่านแล้ว X คน — เฉพาะข้อความของเรา
+            'read_count' => $mine ? $this->readCount($message, $extras['members']) : null,
             'id' => $message->id,
             'sender' => [
                 'id' => $message->sender_id,

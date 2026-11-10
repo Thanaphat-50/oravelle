@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AppNotification;
 use App\Models\ChatMessage;
+use App\Models\ChatMessageReaction;
 use App\Models\Conversation;
 use App\Models\Family;
 use App\Models\FamilyMember;
@@ -13,7 +14,10 @@ use App\Models\Shop;
 use App\Models\User;
 use App\Models\UserBlock;
 use App\Services\PushNotifications;
+use App\Support\ChatExtras;
 use App\Support\MediaStorage;
+use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -208,6 +212,10 @@ class ChatController extends Controller
         $data = $request->validate([
             'after_id' => 'nullable|integer',
             'before_id' => 'nullable|integer',
+            // แอปใหม่ส่ง 0: บอกอ่านแล้วเองตอนข้อความแสดงจริง (POST /read) / แอปเก่าไม่ส่ง = แบบเดิม
+            'mark_read' => 'nullable|boolean',
+            // สถานะ Reaction ของข้อความที่โหลดไว้แล้ว (id >= ค่านี้ ถึง after_id) ไม่เกิน 100 ข้อความ
+            'states_from' => 'nullable|integer|min:1',
         ]);
 
         $query = $conversation->messages();
@@ -231,8 +239,10 @@ class ChatController extends Controller
             $messages = $messages->take(self::PAGE_SIZE)->reverse()->values();
         }
 
-        // เปิดดูห้องอยู่ → นับว่าอ่านถึงข้อความล่าสุดแล้ว
-        if (!isset($data['before_id'])) {
+        $extras = $this->extrasFor($messages, $conversation, $me);
+
+        // แอปเวอร์ชันเก่า: เปิดดูห้องอยู่ → นับว่าอ่านถึงข้อความล่าสุดแล้ว
+        if (!isset($data['before_id']) && ($data['mark_read'] ?? true)) {
             $latestId = (int) $conversation->messages()->max('id');
 
             if ($latestId > $conversation->lastReadId($me->id)) {
@@ -243,8 +253,37 @@ class ChatController extends Controller
         return response()->json([
             'status' => true,
             'conversation' => $this->conversationPayload($conversation, $me),
-            'messages' => $messages->map(fn (ChatMessage $message) => $this->messagePayload($message, $me))->values(),
+            'messages' => $messages->map(fn (ChatMessage $message) => $this->messagePayload($message, $me, $extras))->values(),
             'has_more' => $hasMore,
+            'states' => $this->states($conversation, $me, $data),
+        ]);
+    }
+
+    // =====================================================
+    // POST /api/chats/{conversation}/read {message_id}
+    // แอปบอกว่าแสดงข้อความถึงอันนี้แล้ว (หน้าห้องอยู่ด้านหน้า) — ไม่ถอยหลัง (หลายเครื่อง)
+    // =====================================================
+
+    public function read(Request $request, Conversation $conversation)
+    {
+        $me = $request->user();
+
+        if (!$conversation->hasMember($me->id)) {
+            return $this->notFound();
+        }
+
+        $data = $request->validate(['message_id' => 'required|integer|min:1']);
+
+        $target = min((int) $data['message_id'], (int) $conversation->messages()->max('id'));
+        $column = $conversation->readColumn($me->id);
+
+        Conversation::whereKey($conversation->id)
+            ->where(fn ($rooms) => $rooms->whereNull($column)->orWhere($column, '<', $target))
+            ->update([$column => $target]);
+
+        return response()->json([
+            'status' => true,
+            'unread_count' => $conversation->fresh()->unreadCountFor($me->id),
         ]);
     }
 
@@ -266,6 +305,7 @@ class ChatController extends Controller
             'body' => 'required_without:image|nullable|string|max:2000',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:' . self::MAX_IMAGE_KB,
             'client_id' => 'nullable|string|max:64',
+            'reply_to_id' => 'nullable|integer|min:1',
         ], [
             'body.required_without' => 'กรุณาพิมพ์ข้อความหรือแนบรูป',
             'image.image' => 'รองรับเฉพาะรูป JPG, PNG หรือ WEBP',
@@ -282,6 +322,15 @@ class ChatController extends Controller
         $body = isset($data['body']) ? trim($data['body']) : null;
 
         $clientId = filled($data['client_id'] ?? null) ? $data['client_id'] : null;
+
+        // ตอบกลับได้เฉพาะข้อความในห้องเดียวกัน
+        $replyTo = isset($data['reply_to_id'])
+            ? ChatMessage::where('conversation_id', $conversation->id)->whereKey($data['reply_to_id'])->first()
+            : null;
+
+        if (isset($data['reply_to_id']) && !$replyTo && !$this->sentBefore($conversation, $me, $clientId)) {
+            return $this->replyUnavailable();
+        }
 
         // ส่งซ้ำ (หมดเวลารอแต่เซิร์ฟเวอร์บันทึกแล้ว / กดส่งใหม่) → ข้อความเดิม
         if ($sent = $this->sentBefore($conversation, $me, $clientId)) {
@@ -300,13 +349,15 @@ class ChatController extends Controller
             : null;
 
         try {
-            $message = DB::transaction(function () use ($conversation, $me, $body, $imagePath, $clientId) {
+            $message = DB::transaction(function () use ($conversation, $me, $body, $imagePath, $clientId, $replyTo) {
                 $message = ChatMessage::create([
                     'conversation_id' => $conversation->id,
                     'sender_id' => $me->id,
                     'client_id' => $clientId,
                     'body' => $body === '' ? null : $body,
                     'image_path' => $imagePath,
+                    'reply_to_id' => $replyTo?->id,
+                    'is_reply' => $replyTo !== null,
                 ]);
 
                 // ข้อความของเราเอง = อ่านแล้ว
@@ -589,12 +640,119 @@ class ChatController extends Controller
             'can_send' => $this->canSend($me, $otherId, $conversation),
             // อีกฝ่ายอ่านถึงข้อความไหนแล้ว (แสดง "อ่านแล้ว")
             'other_read_id' => $conversation->lastReadId($otherId),
+            // เราอ่านถึงไหน (เส้น "ข้อความที่ยังไม่ได้อ่าน" ตอนเปิดห้อง)
+            'my_read_id' => $conversation->lastReadId($me->id),
         ];
     }
 
-    private function messagePayload(ChatMessage $message, User $me): array
+    // Reply + Reaction ของข้อความชุดนี้ (โหลดรวดเดียว) — ต้นทางต้องอยู่ห้องเดียวกัน
+    private function extrasFor(Collection $messages, Conversation $conversation, User $me): array
     {
+        $conversationId = (int) $conversation->id;
+
+        return ChatExtras::prepare(
+            $messages,
+            ChatMessage::class,
+            ChatMessageReaction::class,
+            'chat_message_id',
+            $me,
+            fn (ChatMessage $source) => (int) $source->conversation_id === $conversationId
+        );
+    }
+
+    // Reaction ของข้อความที่แอปโหลดไว้แล้ว (ตอนดึงข้อความใหม่) — ชุดเดียว ไม่ยิงทีละข้อความ
+    private function states(Conversation $conversation, User $me, array $data): array
+    {
+        if (!isset($data['states_from'], $data['after_id'])) {
+            return [];
+        }
+
+        $ids = $conversation->messages()
+            ->where('id', '>=', $data['states_from'])
+            ->where('id', '<=', $data['after_id'])
+            ->orderByDesc('id')
+            ->limit(100)
+            ->pluck('id');
+
+        $rows = ChatMessageReaction::whereIn('chat_message_id', $ids)->get(['chat_message_id', 'user_id', 'emoji'])->groupBy('chat_message_id');
+
+        return $ids->map(fn ($id) => [
+            'id' => $id,
+            'reactions' => ChatExtras::summarize($rows[$id] ?? collect(), $me),
+        ])->values()->all();
+    }
+
+    // =====================================================
+    // PUT    /api/chats/{conversation}/messages/{message}/reaction {emoji}  ตั้ง (ส่งซ้ำได้)
+    // DELETE /api/chats/{conversation}/messages/{message}/reaction          ถอน (ส่งซ้ำได้)
+    // ไม่นับ unread / ไม่ส่งแจ้งเตือน
+    // =====================================================
+
+    public function react(Request $request, Conversation $conversation, ChatMessage $message)
+    {
+        $me = $request->user();
+
+        if (!$conversation->hasMember($me->id) || (int) $message->conversation_id !== (int) $conversation->id) {
+            return $this->notFound();
+        }
+
+        $data = $request->validate(['emoji' => ['required', Rule::in(ChatExtras::EMOJIS)]]);
+
+        if (!$this->canSend($me, $conversation->otherUserId($me->id), $conversation)) {
+            return $this->onlyFamily();
+        }
+
+        try {
+            ChatMessageReaction::updateOrCreate(
+                ['chat_message_id' => $message->id, 'user_id' => $me->id],
+                ['emoji' => $data['emoji']]
+            );
+        } catch (UniqueConstraintViolationException) {
+            ChatMessageReaction::where('chat_message_id', $message->id)->where('user_id', $me->id)->update(['emoji' => $data['emoji']]);
+        }
+
+        return $this->reactionsResponse($message, $me);
+    }
+
+    public function unreact(Request $request, Conversation $conversation, ChatMessage $message)
+    {
+        $me = $request->user();
+
+        if (!$conversation->hasMember($me->id) || (int) $message->conversation_id !== (int) $conversation->id) {
+            return $this->notFound();
+        }
+
+        ChatMessageReaction::where('chat_message_id', $message->id)->where('user_id', $me->id)->delete();
+
+        return $this->reactionsResponse($message, $me);
+    }
+
+    private function reactionsResponse(ChatMessage $message, User $me)
+    {
+        return response()->json([
+            'status' => true,
+            'message_id' => $message->id,
+            'reactions' => ChatExtras::summarize(ChatMessageReaction::where('chat_message_id', $message->id)->get(['user_id', 'emoji']), $me),
+        ]);
+    }
+
+    private function replyUnavailable()
+    {
+        return response()->json([
+            'status' => false,
+            'code' => 'reply_unavailable',
+            'message' => 'ข้อความที่ต้องการตอบกลับไม่พร้อมใช้งานแล้ว',
+            'errors' => ['reply_to_id' => ['ข้อความที่ต้องการตอบกลับไม่พร้อมใช้งานแล้ว']],
+        ], 422);
+    }
+
+    private function messagePayload(ChatMessage $message, User $me, ?array $extras = null): array
+    {
+        $extras ??= $this->extrasFor(collect([$message]), $message->conversation, $me);
+
         return [
+            'reply_to' => ChatExtras::replyPayload($message, $extras),
+            'reactions' => ChatExtras::reactionsPayload($message, $extras),
             'id' => $message->id,
             'sender_id' => $message->sender_id,
             'is_mine' => (int) $message->sender_id === (int) $me->id,

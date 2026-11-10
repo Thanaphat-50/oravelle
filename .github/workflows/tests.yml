@@ -109,7 +109,7 @@ jobs:
           DB_DATABASE: oravelle_test
           DB_USERNAME: root
           DB_PASSWORD: root
-        run: php artisan test --filter="SearchTest|GroupChatTest" --fail-on-skipped
+        run: php artisan test --filter="SearchTest|GroupChatTest|ChatReplyReactionTest" --fail-on-skipped
 
   flutter:
     name: Flutter analyze

@@ -27,10 +27,17 @@ class GroupChatMessage extends Model
         'client_id',
         'body',
         'image_path',
+        // ตอบกลับข้อความ (ห้องเดียวกันเท่านั้น)
+        'reply_to_id',
+        'is_reply',
     ];
 
     protected $hidden = [
         'image_path',
+    ];
+
+    protected $casts = [
+        'is_reply' => 'boolean',
     ];
 
     public function chat()
