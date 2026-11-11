@@ -98,6 +98,15 @@ class Conversation extends Model
             ->count();
     }
 
+    // ไฟล์แนบ (disk ส่วนตัว) ในทุกห้องของผู้ใช้ (ใช้ตอนลบบัญชี ก่อนห้องถูกลบตาม cascade)
+    public static function attachmentPathsOf(int $userId): array
+    {
+        return ChatMessage::whereIn('conversation_id', self::of($userId)->select('id'))
+            ->whereNotNull('attachment_path')
+            ->pluck('attachment_path')
+            ->all();
+    }
+
     // ไฟล์รูปในทุกห้องของผู้ใช้ (ใช้ตอนลบบัญชี ก่อนห้องถูกลบตาม cascade)
     public static function mediaPathsOf(int $userId): array
     {

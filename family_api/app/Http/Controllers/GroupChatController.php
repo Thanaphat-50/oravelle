@@ -9,6 +9,7 @@ use App\Models\GroupChatMember;
 use App\Models\GroupChatMessage;
 use App\Models\GroupChatMessageReaction;
 use App\Models\User;
+use App\Support\ChatAttachment;
 use App\Support\ChatExtras;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
@@ -149,12 +150,14 @@ class GroupChatController extends Controller
         }
 
         $data = $request->validate([
-            'body' => 'required_without:image|nullable|string|max:' . self::MAX_BODY,
+            'body' => 'required_without_all:image,file,voice|nullable|string|max:' . self::MAX_BODY,
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:' . self::MAX_IMAGE_KB,
             'client_id' => 'required|string|max:64',
             'reply_to_id' => 'nullable|integer|min:1',
+            ...ChatAttachment::rules(),
         ], [
-            'body.required_without' => 'กรุณาพิมพ์ข้อความหรือแนบรูป',
+            ...ChatAttachment::messages(),
+            'body.required_without_all' => 'กรุณาพิมพ์ข้อความหรือแนบไฟล์',
             'body.max' => 'ข้อความยาวได้ไม่เกิน 2,000 ตัวอักษร',
             'image.image' => 'รองรับเฉพาะรูป JPG, PNG หรือ WEBP',
             'image.mimes' => 'รองรับเฉพาะรูป JPG, PNG หรือ WEBP',
@@ -186,7 +189,14 @@ class GroupChatController extends Controller
             }
         }
 
-        if ($body === '' && !$request->hasFile('image')) {
+        // ไฟล์/เสียง: ตรวจชนิดจากเนื้อไฟล์จริง + จำกัดความถี่ (ไม่ผ่าน → 422/429)
+        $attachment = ChatAttachment::inspect($request, $me->id);
+
+        if (($attachment['kind'] ?? null) === 'voice') {
+            $body = '';
+        }
+
+        if ($body === '' && !$request->hasFile('image') && !$attachment) {
             return response()->json([
                 'status' => false,
                 'message' => 'กรุณาพิมพ์ข้อความหรือแนบรูป',
@@ -197,8 +207,10 @@ class GroupChatController extends Controller
             ? $request->file('image')->store('group_chat_images', GroupChatMessage::disk())
             : null;
 
+        $attachmentPath = $attachment ? ChatAttachment::store($attachment, 'group_chat_files') : null;
+
         try {
-            $message = DB::transaction(function () use ($chat, $me, $body, $imagePath, $data, $replyTo) {
+            $message = DB::transaction(function () use ($chat, $me, $body, $imagePath, $data, $replyTo, $attachment, $attachmentPath) {
                 // ล็อกแถวสมาชิกรอบนี้: ถูกนำออกพร้อมกัน → ฝั่งที่ลบรอ หรือเราเห็นว่าหมดสิทธิ์แล้ว
                 // (ไม่รับข้อความหลังหมดสิทธิ์ตามลำดับธุรกรรม)
                 $membership = FamilyMember::where('user_id', $me->id)
@@ -222,6 +234,7 @@ class GroupChatController extends Controller
                     'image_path' => $imagePath,
                     'reply_to_id' => $replyTo?->id,
                     'is_reply' => $replyTo !== null,
+                    ...ChatAttachment::columns($attachment, $attachmentPath),
                 ]);
 
                 $chat->forceFill(['last_message_at' => $message->created_at])->save();
@@ -232,8 +245,8 @@ class GroupChatController extends Controller
                 return $message;
             });
         } catch (UniqueConstraintViolationException $e) {
-            // ส่งซ้ำเข้ามาพร้อมกัน: อีกคำขอบันทึกไปก่อน → ใช้ข้อความนั้น
-            GroupChatMessage::deleteFiles([$imagePath]);
+            // ส่งซ้ำเข้ามาพร้อมกัน: อีกคำขอบันทึกไปก่อน → ใช้ข้อความนั้น (ไม่เหลือไฟล์กำพร้า)
+            GroupChatMessage::deleteFiles([$imagePath, $attachmentPath]);
 
             $sent = $this->sentBefore($chat, $me, $data['client_id']);
 
@@ -243,13 +256,13 @@ class GroupChatController extends Controller
 
             return $this->sentResponse($sent, $me, 200);
         } catch (Throwable $e) {
-            GroupChatMessage::deleteFiles([$imagePath]);
+            GroupChatMessage::deleteFiles([$imagePath, $attachmentPath]);
 
             throw $e;
         }
 
         if (!$message) {
-            GroupChatMessage::deleteFiles([$imagePath]);
+            GroupChatMessage::deleteFiles([$imagePath, $attachmentPath]);
 
             return $this->noAccess();
         }
@@ -326,6 +339,24 @@ class GroupChatController extends Controller
             'Cache-Control' => 'private, max-age=300',
             'X-Content-Type-Options' => 'nosniff',
         ]);
+    }
+
+    // ไฟล์แนบ/ข้อความเสียง: ลิงก์ลงลายเซ็น (สร้างให้เฉพาะผู้มีสิทธิ์) + ตรวจสิทธิ์ของผู้ดูซ้ำทุกครั้ง
+    // สมาชิกใหม่/กลับเข้ากลุ่มรอบใหม่ เปิดไฟล์ของรอบเก่าไม่ได้ / ออกจากกลุ่มแล้วเปิดไม่ได้
+    public function file(Request $request, GroupChatMessage $message)
+    {
+        $viewer = User::find((int) $request->query('viewer'));
+        $chat = $message->chat;
+        $access = $viewer && $chat ? $chat->accessFor($viewer) : null;
+
+        if (!$access || !$this->canSee($access, $message) || !$message->attachment_path) {
+            return response()->json([
+                'status' => false,
+                'message' => 'คุณไม่มีสิทธิ์เปิดไฟล์นี้แล้ว',
+            ], 403);
+        }
+
+        return ChatAttachment::respond($message);
     }
 
     // =====================================================
@@ -502,6 +533,7 @@ class GroupChatController extends Controller
             'client_id' => $mine ? $message->client_id : null,
             'body' => $message->body,
             'image_url' => $message->imageUrlFor($me),
+            'attachment' => ChatAttachment::payload($message, 'group-chat.file', (int) $me->id),
             'created_at' => $message->created_at?->toIso8601String(),
         ];
     }

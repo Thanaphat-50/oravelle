@@ -14,6 +14,7 @@ use App\Models\Shop;
 use App\Models\User;
 use App\Models\UserBlock;
 use App\Services\PushNotifications;
+use App\Support\ChatAttachment;
 use App\Support\ChatExtras;
 use App\Support\MediaStorage;
 use Illuminate\Support\Collection;
@@ -88,6 +89,7 @@ class ChatController extends Controller
                 'last_message' => $last ? [
                     'body' => $last->body ? Str::limit($last->body, 80) : null,
                     'has_image' => $last->image_path !== null,
+                    'attachment_kind' => $last->attachment_kind,
                     'is_mine' => (int) $last->sender_id === (int) $me->id,
                     'created_at' => $last->created_at?->toIso8601String(),
                 ] : null,
@@ -302,12 +304,14 @@ class ChatController extends Controller
         }
 
         $data = $request->validate([
-            'body' => 'required_without:image|nullable|string|max:2000',
+            'body' => 'required_without_all:image,file,voice|nullable|string|max:2000',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:' . self::MAX_IMAGE_KB,
             'client_id' => 'nullable|string|max:64',
             'reply_to_id' => 'nullable|integer|min:1',
+            ...ChatAttachment::rules(),
         ], [
-            'body.required_without' => 'กรุณาพิมพ์ข้อความหรือแนบรูป',
+            ...ChatAttachment::messages(),
+            'body.required_without_all' => 'กรุณาพิมพ์ข้อความหรือแนบไฟล์',
             'image.image' => 'รองรับเฉพาะรูป JPG, PNG หรือ WEBP',
             'image.mimes' => 'รองรับเฉพาะรูป JPG, PNG หรือ WEBP',
             'image.max' => 'รูปต้องมีขนาดไม่เกิน 4 MB',
@@ -337,7 +341,15 @@ class ChatController extends Controller
             return $this->sentResponse($sent, $me, 200);
         }
 
-        if (($body === null || $body === '') && !$request->hasFile('image')) {
+        // ไฟล์/เสียง: ตรวจชนิดจากเนื้อไฟล์จริง + จำกัดความถี่ (ไม่ผ่าน → 422/429)
+        $attachment = ChatAttachment::inspect($request, $me->id);
+
+        // ข้อความเสียงไม่มีคำบรรยาย
+        if (($attachment['kind'] ?? null) === 'voice') {
+            $body = null;
+        }
+
+        if (($body === null || $body === '') && !$request->hasFile('image') && !$attachment) {
             return response()->json([
                 'status' => false,
                 'message' => 'กรุณาพิมพ์ข้อความหรือแนบรูป',
@@ -348,8 +360,10 @@ class ChatController extends Controller
             ? MediaStorage::storeAll([$request->file('image')], 'chat_images')[0]
             : null;
 
+        $attachmentPath = $attachment ? ChatAttachment::store($attachment, 'chat_files') : null;
+
         try {
-            $message = DB::transaction(function () use ($conversation, $me, $body, $imagePath, $clientId, $replyTo) {
+            $message = DB::transaction(function () use ($conversation, $me, $body, $imagePath, $clientId, $replyTo, $attachment, $attachmentPath) {
                 $message = ChatMessage::create([
                     'conversation_id' => $conversation->id,
                     'sender_id' => $me->id,
@@ -358,6 +372,7 @@ class ChatController extends Controller
                     'image_path' => $imagePath,
                     'reply_to_id' => $replyTo?->id,
                     'is_reply' => $replyTo !== null,
+                    ...ChatAttachment::columns($attachment, $attachmentPath),
                 ]);
 
                 // ข้อความของเราเอง = อ่านแล้ว
@@ -369,8 +384,9 @@ class ChatController extends Controller
                 return $message;
             });
         } catch (UniqueConstraintViolationException $e) {
-            // ส่งซ้ำเข้ามาพร้อมกัน: อีกคำขอบันทึกไปก่อน → ใช้ข้อความนั้น
+            // ส่งซ้ำเข้ามาพร้อมกัน: อีกคำขอบันทึกไปก่อน → ใช้ข้อความนั้น (ไม่เหลือไฟล์กำพร้า)
             MediaStorage::delete([$imagePath]);
+            ChatAttachment::deleteFiles([$attachmentPath]);
 
             $sent = $this->sentBefore($conversation, $me, $clientId);
 
@@ -381,6 +397,7 @@ class ChatController extends Controller
             return $this->sentResponse($sent, $me, 200);
         } catch (Throwable $e) {
             MediaStorage::delete([$imagePath]);
+            ChatAttachment::deleteFiles([$attachmentPath]);
 
             throw $e;
         }
@@ -388,6 +405,48 @@ class ChatController extends Controller
         $this->notifyRecipient($me, $otherId, $conversation, $message);
 
         return $this->sentResponse($message, $me, 201);
+    }
+
+    // =====================================================
+    // GET /api/chats/{conversation}/messages/{message}
+    // ข้อความเดียว (ลิงก์ไฟล์/เสียงใหม่เมื่อลิงก์เดิมหมดอายุ)
+    // =====================================================
+
+    public function show(Request $request, Conversation $conversation, ChatMessage $message)
+    {
+        $me = $request->user();
+
+        if (!$conversation->hasMember($me->id) || (int) $message->conversation_id !== (int) $conversation->id) {
+            return $this->notFound();
+        }
+
+        return response()->json([
+            'status' => true,
+            'message' => $this->messagePayload($message, $me),
+        ]);
+    }
+
+    // =====================================================
+    // GET /api/chat-files/{message}?viewer=&signature= (ลิงก์ลงลายเซ็น อายุสั้น)
+    // ไฟล์แนบ/ข้อความเสียง: ตรวจว่าผู้ดูยังเป็นสมาชิกห้องทุกครั้งที่เปิด
+    // =====================================================
+
+    public function file(Request $request, ChatMessage $message)
+    {
+        $viewerId = (int) $request->query('viewer');
+        $conversation = $message->conversation;
+
+        if (!$conversation
+            || !$message->attachment_path
+            || !$conversation->hasMember($viewerId)
+            || !User::whereKey($viewerId)->exists()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'คุณไม่มีสิทธิ์เปิดไฟล์นี้แล้ว',
+            ], 403);
+        }
+
+        return ChatAttachment::respond($message);
     }
 
     private function sentBefore(Conversation $conversation, User $me, ?string $clientId): ?ChatMessage
@@ -462,6 +521,7 @@ class ChatController extends Controller
             'last_message' => $last ? [
                 'body' => $last->body ? Str::limit($last->body, 80) : null,
                 'has_image' => $last->image_path !== null,
+                'attachment_kind' => $last->attachment_kind,
                 'is_mine' => (int) $last->sender_id === (int) $me->id,
                 'sender_name' => $last->sender?->name,
                 'created_at' => $last->created_at?->toIso8601String(),
@@ -769,6 +829,8 @@ class ChatController extends Controller
             'client_id' => (int) $message->sender_id === (int) $me->id ? $message->client_id : null,
             'body' => $message->body,
             'image_url' => $message->image_url,
+            // ไฟล์/เสียง: ลิงก์ชั่วคราวผูกกับผู้ดู (ผู้ดูเป็นสมาชิกห้องแล้ว)
+            'attachment' => ChatAttachment::payload($message, 'chat.file', (int) $me->id),
             'created_at' => $message->created_at?->toIso8601String(),
         ];
     }
@@ -789,7 +851,11 @@ class ChatController extends Controller
 
         $body = $message->body
             ? Str::limit($message->body, 100)
-            : '📷 ส่งรูปภาพ';
+            : match ($message->attachment_kind) {
+                'file' => '📎 ส่งไฟล์',
+                'voice' => '🎤 ส่งข้อความเสียง',
+                default => '📷 ส่งรูปภาพ',
+            };
 
         $conversationId = $conversation->id;
 

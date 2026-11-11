@@ -67,6 +67,8 @@ class ChatExtras
             'is_mine' => (int) $source->sender_id === (int) $extras['viewer']->id,
             'body' => $source->body ? Str::limit($source->body, 100) : null,
             'has_image' => $source->image_path !== null,
+            // บอกแค่ชนิด (ไฟล์/เสียง) ไม่มีชื่อไฟล์หรือลิงก์
+            'attachment_kind' => $source->attachment_kind,
         ];
     }
 

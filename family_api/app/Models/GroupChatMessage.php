@@ -30,10 +30,18 @@ class GroupChatMessage extends Model
         // ตอบกลับข้อความ (ห้องเดียวกันเท่านั้น)
         'reply_to_id',
         'is_reply',
+        // ไฟล์แนบ (ไฟล์เอกสาร / ข้อความเสียง) — ตรวจและตั้งค่าโดยเซิร์ฟเวอร์
+        'attachment_path',
+        'attachment_kind',
+        'attachment_name',
+        'attachment_mime',
+        'attachment_size',
+        'voice_duration_ms',
     ];
 
     protected $hidden = [
         'image_path',
+        'attachment_path',
     ];
 
     protected $casts = [

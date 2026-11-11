@@ -759,7 +759,12 @@ class FamilyController extends Controller
         $groupChatImages = GroupChatMessage::whereIn(
             'group_chat_id',
             GroupChat::where('family_id', $family->id)->select('id')
-        )->whereNotNull('image_path')->pluck('image_path')->all();
+        )->where(fn ($files) => $files->whereNotNull('image_path')->orWhereNotNull('attachment_path'))
+            ->get(['image_path', 'attachment_path'])
+            ->flatMap(fn ($message) => [$message->image_path, $message->attachment_path])
+            ->filter()
+            ->values()
+            ->all();
 
         DB::transaction(function () use (
             $family

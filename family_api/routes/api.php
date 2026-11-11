@@ -353,6 +353,11 @@ Route::middleware('auth:sanctum')->group(function () {
         'destroy'
     ]);
 
+    // ข้อความเดียว (ลิงก์ไฟล์/เสียงใหม่เมื่อลิงก์เดิมหมดอายุ)
+    Route::get('/chats/{conversation}/messages/{message}', [ChatController::class, 'show'])
+        ->whereNumber(['conversation', 'message'])
+        ->middleware('throttle:chat');
+
     // บัญชี Google / LINE / Facebook ที่เชื่อมไว้ (หน้าตั้งค่า)
     Route::get('/social-accounts', [
         SocialAuthController::class,
@@ -884,6 +889,17 @@ Route::get('/group-chat-images/{message}', [GroupChatController::class, 'image']
     ->middleware(['signed', 'throttle:240,1'])
     ->whereNumber('message')
     ->name('group-chat.image');
+
+// ไฟล์แนบ/ข้อความเสียงในแชท: ลิงก์ชั่วคราว 10 นาทีที่ลงลายเซ็น ผูกกับผู้ดู + ตรวจสิทธิ์ผู้ดูซ้ำทุกครั้ง
+Route::get('/chat-files/{message}', [ChatController::class, 'file'])
+    ->middleware(['signed', 'throttle:240,1'])
+    ->whereNumber('message')
+    ->name('chat.file');
+
+Route::get('/group-chat-files/{message}', [GroupChatController::class, 'file'])
+    ->middleware(['signed', 'throttle:240,1'])
+    ->whereNumber('message')
+    ->name('group-chat.file');
 
 // รูปแนบในคำร้อง: ลิงก์ชั่วคราวที่ลงลายเซ็น (สร้างให้เฉพาะเจ้าของคำร้องและทีมงาน)
 Route::get('/support/files/{attachment}', [SupportTicketController::class, 'file'])
