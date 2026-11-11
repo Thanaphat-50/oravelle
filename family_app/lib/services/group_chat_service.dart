@@ -99,10 +99,14 @@ class GroupChatService {
     String? imagePath,
     required String clientId,
     int? replyToId,
+    String? filePath,
+    String? fileName,
+    String? voicePath,
+    int? voiceDurationMs,
   }) async {
     final Uri uri = Uri.parse('$baseUrl/group-chats/$chatId/messages');
 
-    if (imagePath == null) {
+    if (imagePath == null && filePath == null && voicePath == null) {
       final headers = await _headers();
 
       final response = await ApiHelper.request(
@@ -130,7 +134,26 @@ class GroupChatService {
       request.fields['body'] = body;
     }
 
-    request.files.add(await http.MultipartFile.fromPath('image', imagePath));
+    if (imagePath != null) {
+      request.files.add(await http.MultipartFile.fromPath('image', imagePath));
+    }
+
+    if (filePath != null) {
+      request.files.add(
+        await http.MultipartFile.fromPath('file', filePath, filename: fileName),
+      );
+    }
+
+    if (voicePath != null) {
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'voice',
+          voicePath,
+          filename: 'voice.m4a',
+        ),
+      );
+      request.fields['voice_duration_ms'] = '${voiceDurationMs ?? 0}';
+    }
 
     final response = await ApiHelper.request(
       () async => http.Response.fromStream(await request.send()),
@@ -138,7 +161,7 @@ class GroupChatService {
     );
 
     if (response.statusCode == 413) {
-      return {'status': false, 'message': 'รูปมีขนาดใหญ่เกินไป'};
+      return {'status': false, 'message': 'ไฟล์มีขนาดใหญ่เกินไป'};
     }
 
     return _decode(response);

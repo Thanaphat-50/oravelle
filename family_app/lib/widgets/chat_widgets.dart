@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../theme/app_theme.dart';
+import 'chat_media.dart';
 import 'user_avatar.dart';
 
 // =======================================================
@@ -249,16 +250,27 @@ class ChatBubble extends StatelessWidget {
                 bottomRight: mine && endOfRun ? tail : round,
               ),
             ),
-            child: ExcludeSemantics(
-              child: Text(
-                body,
-                style: TextStyle(
-                  color: mine ? Colors.white : AppColors.navy,
-                  fontSize: 15,
-                  height: 1.4,
-                ),
-              ),
-            ),
+            // มีลิงก์ → ให้โปรแกรมอ่านหน้าจอแตะลิงก์ได้ / ไม่มี → ป้ายของฟองอ่านให้แล้ว
+            child: chatLinkPattern.hasMatch(body)
+                ? ChatLinkText(
+                    text: body,
+                    linkColor: mine ? Colors.white : AppColors.primary,
+                    style: TextStyle(
+                      color: mine ? Colors.white : AppColors.navy,
+                      fontSize: 15,
+                      height: 1.4,
+                    ),
+                  )
+                : ExcludeSemantics(
+                    child: Text(
+                      body,
+                      style: TextStyle(
+                        color: mine ? Colors.white : AppColors.navy,
+                        fontSize: 15,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
           ),
         ?below,
         if (footer != null && footer!.isNotEmpty)
@@ -334,23 +346,31 @@ class ChatComposer extends StatelessWidget {
   final XFile? image;
   final bool canSend;
   final String hint;
-  final VoidCallback onPickImage;
+  final VoidCallback onAttach;
   final VoidCallback onRemoveImage;
   final VoidCallback onSend;
   final Widget? top;
   final FocusNode? focusNode;
+
+  // ช่องพิมพ์ว่าง → ปุ่มไมค์แทนปุ่มส่ง / ปุ่มอีโมจิสลับกับแป้นพิมพ์
+  final VoidCallback? onMic;
+  final VoidCallback? onEmoji;
+  final bool emojiOpen;
 
   const ChatComposer({
     super.key,
     required this.controller,
     required this.image,
     required this.canSend,
-    required this.onPickImage,
+    required this.onAttach,
     required this.onRemoveImage,
     required this.onSend,
     this.hint = 'พิมพ์ข้อความ...',
     this.top,
     this.focusNode,
+    this.onMic,
+    this.onEmoji,
+    this.emojiOpen = false,
   });
 
   @override
@@ -410,10 +430,10 @@ class ChatComposer extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   IconButton(
-                    tooltip: 'แนบรูป',
-                    onPressed: onPickImage,
+                    tooltip: 'แนบรูป ไฟล์ หรือลิงก์',
+                    onPressed: onAttach,
                     icon: Icon(
-                      Icons.add_photo_alternate_outlined,
+                      Icons.add_circle_outline_rounded,
                       color: AppColors.primary,
                     ),
                   ),
@@ -421,6 +441,8 @@ class ChatComposer extends StatelessWidget {
                     child: TextField(
                       controller: controller,
                       focusNode: focusNode,
+                      // แผงอีโมจิเปิดอยู่ → แตะช่องพิมพ์ = กลับไปใช้แป้นพิมพ์
+                      onTap: emojiOpen ? onEmoji : null,
                       minLines: 1,
                       maxLines: 5,
                       maxLength: 2000,
@@ -432,6 +454,18 @@ class ChatComposer extends StatelessWidget {
                         isDense: true,
                         filled: true,
                         fillColor: AppColors.fill,
+                        suffixIcon: onEmoji == null
+                            ? null
+                            : IconButton(
+                                tooltip: emojiOpen ? 'แป้นพิมพ์' : 'อีโมจิ',
+                                onPressed: onEmoji,
+                                icon: Icon(
+                                  emojiOpen
+                                      ? Icons.keyboard_alt_outlined
+                                      : Icons.emoji_emotions_outlined,
+                                  color: AppColors.muted,
+                                ),
+                              ),
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 14,
                           vertical: 10,
@@ -452,20 +486,35 @@ class ChatComposer extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  IconButton.filled(
-                    tooltip: 'ส่ง',
-                    onPressed: canSend ? onSend : null,
-                    style: IconButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      disabledBackgroundColor: AppColors.border,
-                      minimumSize: const Size(44, 44),
+                  if (!canSend && onMic != null)
+                    IconButton.filled(
+                      tooltip: 'อัดข้อความเสียง',
+                      onPressed: onMic,
+                      style: IconButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        minimumSize: const Size(44, 44),
+                      ),
+                      icon: const Icon(
+                        Icons.mic_rounded,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    )
+                  else
+                    IconButton.filled(
+                      tooltip: 'ส่ง',
+                      onPressed: canSend ? onSend : null,
+                      style: IconButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        disabledBackgroundColor: AppColors.border,
+                        minimumSize: const Size(44, 44),
+                      ),
+                      icon: const Icon(
+                        Icons.send_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                     ),
-                    icon: const Icon(
-                      Icons.send_rounded,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
                 ],
               ),
             ],
@@ -500,6 +549,10 @@ class ChatReplyPreview extends StatelessWidget {
         ? 'ข้อความนี้ไม่พร้อมใช้งาน'
         : body.isNotEmpty
         ? body
+        : reply['attachment_kind'] == 'voice'
+        ? '🎤 ข้อความเสียง'
+        : reply['attachment_kind'] == 'file'
+        ? '📎 ไฟล์'
         : (reply['has_image'] == true ? '📷 รูปภาพ' : '');
 
     return Semantics(

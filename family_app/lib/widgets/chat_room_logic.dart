@@ -2,12 +2,19 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../pages/chat_photo_preview_page.dart';
 import '../services/api_helper.dart';
 import '../theme/app_theme.dart';
+import 'chat_media.dart';
 import 'chat_widgets.dart';
 import 'photo_viewer.dart';
 
@@ -125,6 +132,9 @@ mixin ChatRoomLogic<T extends StatefulWidget>
   // ไม่สำเร็จ → throw (จะบอกใหม่รอบหน้า)
   Future<void> markReadOnServer(int messageId);
 
+  // ข้อความเดียว (ลิงก์ไฟล์/เสียงใหม่เมื่อลิงก์เดิมหมดอายุ)
+  Future<Map<String, dynamic>> fetchMessage(int messageId);
+
   // เรียกใน setState: ข้อมูลห้อง/คู่สนทนาจากผลลัพธ์
   void applyMeta(Map<String, dynamic> result);
 
@@ -182,6 +192,11 @@ mixin ChatRoomLogic<T extends StatefulWidget>
     inputController.dispose();
     scrollController.dispose();
     inputFocus.dispose();
+
+    // ออกจากห้อง: หยุดอัด (ลบไฟล์ชั่วคราว) และหยุดเล่นเสียง
+    recorder?.dispose();
+    recorder = null;
+    ChatVoicePlayer.instance.stop();
   }
 
   // ห้องที่รู้รหัสทีหลัง (แชทกลุ่มเปิดจากหน้ากลุ่ม) → คืนร่างข้อความถ้าช่องพิมพ์ยังว่าง
@@ -202,7 +217,14 @@ mixin ChatRoomLogic<T extends StatefulWidget>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     appActive = state == AppLifecycleState.resumed;
 
-    if (appActive) poll();
+    if (appActive) {
+      poll();
+      return;
+    }
+
+    // แอปพัก / มีสายเข้า: หยุดอัด (เก็บส่วนที่อัดแล้วให้ฟังก่อนส่ง) และหยุดเล่นเสียง
+    recorder?.stop();
+    ChatVoicePlayer.instance.stop();
   }
 
   // =====================================================
@@ -220,10 +242,14 @@ mixin ChatRoomLogic<T extends StatefulWidget>
 
     return raw
         .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
+        .map((item) => stamp(Map<String, dynamic>.from(item)))
         .where((message) => idOf(message) != null)
         .toList();
   }
+
+  // เวลาที่ได้รับ (ลิงก์ไฟล์/เสียงมีอายุสั้น → ใกล้หมดค่อยขอใหม่)
+  Map<String, dynamic> stamp(Map<String, dynamic> message) =>
+      message..['_received_at'] = DateTime.now();
 
   Map<String, dynamic>? messageById(int id) {
     for (final message in messages) {
@@ -502,6 +528,11 @@ mixin ChatRoomLogic<T extends StatefulWidget>
   bool get hasDraft =>
       inputController.text.trim().isNotEmpty || pickedImage != null;
 
+  // แถบอัดเสียง: หน้าห้องต้องสร้างใหม่เมื่อเริ่ม/หยุด/ทิ้ง เพื่อสลับกับช่องพิมพ์
+  void onRecorderChanged() {
+    if (mounted) setState(() {});
+  }
+
   Future<void> pickImage() async {
     try {
       final XFile? image = await imagePicker.pickImage(
@@ -522,10 +553,34 @@ mixin ChatRoomLogic<T extends StatefulWidget>
     if (body.isNotEmpty) return body;
 
     final String? url = message['image_url']?.toString();
+    final String? kind = attachmentKindOf(message);
+
+    if (kind == 'voice') return '🎤 ข้อความเสียง';
+    if (kind == 'file') return '📎 ${attachmentNameOf(message)}';
 
     return (url != null && url.isNotEmpty) || message['image'] != null
         ? '📷 รูปภาพ'
         : '';
+  }
+
+  String? attachmentKindOf(Map<String, dynamic> message) {
+    if (message['voice'] is Map) return 'voice';
+    if (message['file'] is Map) return 'file';
+
+    final dynamic attachment = message['attachment'];
+
+    return attachment is Map ? attachment['kind']?.toString() : null;
+  }
+
+  String attachmentNameOf(Map<String, dynamic> message) {
+    final dynamic local = message['file'];
+    final dynamic attachment = message['attachment'];
+
+    if (local is Map) return local['name']?.toString() ?? 'ไฟล์';
+
+    return attachment is Map
+        ? attachment['name']?.toString() ?? 'ไฟล์'
+        : 'ไฟล์';
   }
 
   // ตัวอย่างข้อความต้นทางของข้อความที่กำลังส่ง (หลังส่งสำเร็จใช้ของเซิร์ฟเวอร์)
@@ -540,11 +595,13 @@ mixin ChatRoomLogic<T extends StatefulWidget>
       'sender_name': senderNameOf(message),
       'body': body.length > 100 ? '${body.substring(0, 100)}…' : body,
       'has_image': url != null && url.isNotEmpty,
+      'attachment_kind': attachmentKindOf(message),
     };
   }
 
-  void send() {
-    if (!hasDraft || !canCompose || !roomReady) return;
+  // เข้าคิวส่ง (ข้อความ/รูป/ไฟล์/เสียง) พร้อมข้อความที่กำลังตอบกลับ
+  void enqueue(Map<String, dynamic> content) {
+    if (!canCompose || !roomReady) return;
 
     final Map<String, dynamic>? reply = replyingTo;
 
@@ -554,23 +611,415 @@ mixin ChatRoomLogic<T extends StatefulWidget>
       outbox.add({
         'client_id':
             '${DateTime.now().microsecondsSinceEpoch}-${random.nextInt(1 << 30)}',
-        'body': inputController.text.trim(),
-        'image': pickedImage,
+        'body': '',
+        'image': null,
         'state': 'sending',
         'error': null,
         'is_mine': true,
         'created_at': DateTime.now().toIso8601String(),
+        ...content,
         if (reply != null) 'reply_to_id': idOf(reply),
         if (reply != null) 'reply_to': replyPreviewOf(reply),
       });
 
-      inputController.clear();
-      pickedImage = null;
       replyingTo = null;
     });
 
     scrollToNewest();
     flushOutbox();
+  }
+
+  void send() {
+    if (!hasDraft || !canCompose || !roomReady) return;
+
+    final String text = inputController.text.trim();
+    final XFile? image = pickedImage;
+
+    pickedImage = null;
+    inputController.clear();
+    enqueue({'body': text, 'image': image});
+  }
+
+  // ไฟล์ชั่วคราวของแอป (เสียงที่อัด / สำเนาไฟล์ที่เลือก) → ลบเมื่อส่งสำเร็จหรือทิ้ง
+  void deleteTempFiles(Map<String, dynamic> entry) {
+    final dynamic paths = entry['temp_paths'];
+
+    if (paths is! List) return;
+
+    for (final path in paths.whereType<String>()) {
+      File(path).delete().catchError((_) => File(path));
+    }
+  }
+
+  // =====================================================
+  // แนบ: ถ่ายรูป / เลือกรูป / ส่งไฟล์ / แชร์ลิงก์
+  // =====================================================
+
+  Future<void> openAttachMenu() async {
+    closeEmoji();
+
+    final String? choice = await showChatAttachMenu(context);
+
+    if (!mounted || choice == null) return;
+
+    switch (choice) {
+      case 'camera':
+        await takePhoto();
+      case 'gallery':
+        await pickImage();
+      case 'file':
+        await pickDocument();
+      case 'link':
+        await shareLink();
+    }
+  }
+
+  // ถ่ายรูป → ดูตัวอย่าง (ถ่ายใหม่ / ยกเลิก / ใส่คำบรรยาย) → ส่ง / ร่างในช่องพิมพ์ไม่ถูกแตะต้อง
+  Future<void> takePhoto() async {
+    if (!await ensureChatPermission(context, Permission.camera, 'กล้อง')) {
+      return;
+    }
+
+    while (mounted) {
+      XFile? shot;
+
+      try {
+        shot = await imagePicker.pickImage(
+          source: ImageSource.camera,
+          maxWidth: 1600,
+          imageQuality: 80,
+        );
+      } catch (_) {
+        if (mounted) showMessage('เปิดกล้องไม่สำเร็จ');
+        return;
+      }
+
+      if (shot == null || !mounted) return;
+
+      final Object? result = await Navigator.of(context).push<Object?>(
+        MaterialPageRoute(builder: (_) => ChatPhotoPreviewPage(image: shot!)),
+      );
+
+      if (result == 'retake') continue;
+
+      if (result is Map) {
+        enqueue({
+          'body': (result['caption'] ?? '').toString().trim(),
+          'image': shot,
+        });
+      }
+
+      return;
+    }
+  }
+
+  Future<void> pickDocument() async {
+    PlatformFile? picked;
+
+    try {
+      picked = await FilePicker.pickFile(
+        type: FileType.custom,
+        allowedExtensions: chatFileExtensions,
+      );
+    } catch (_) {
+      if (mounted) showMessage('เลือกไฟล์ไม่สำเร็จ');
+      return;
+    }
+
+    if (picked == null || !mounted) return;
+
+    final String extension = (picked.extension ?? '').toLowerCase();
+
+    if (!chatFileExtensions.contains(extension)) {
+      showMessage('รองรับเฉพาะไฟล์ PDF, TXT, DOCX, XLSX และ PPTX');
+      return;
+    }
+
+    final int size = await picked.length() ?? 0;
+
+    if (size <= 0 || size > chatMaxFileBytes) {
+      if (mounted) showMessage('ไฟล์ต้องมีขนาดไม่เกิน 10 MB');
+      return;
+    }
+
+    String? path = picked.path;
+    final List<String> temp = [];
+
+    // ไฟล์จากผู้ให้บริการเอกสาร (content://) → คัดลอกไว้ชั่วคราวเพื่ออัปโหลด/ลองใหม่
+    if (path == null) {
+      try {
+        final Directory dir = await getTemporaryDirectory();
+        final File copy = File(
+          '${dir.path}/upload_${DateTime.now().microsecondsSinceEpoch}.$extension',
+        );
+        final IOSink sink = copy.openWrite();
+
+        await sink.addStream(picked.readAsByteStream());
+        await sink.close();
+
+        path = copy.path;
+        temp.add(copy.path);
+      } catch (_) {
+        if (mounted) showMessage('อ่านไฟล์ไม่สำเร็จ');
+        return;
+      }
+    }
+
+    enqueue({
+      'file': {'path': path, 'name': picked.name, 'size': size},
+      'temp_paths': temp,
+    });
+  }
+
+  Future<void> shareLink() async {
+    final String? link = await showDialog<String>(
+      context: context,
+      builder: (_) => const ChatLinkDialog(),
+    );
+
+    if (link == null || !mounted) return;
+
+    insertIntoComposer('$link ');
+  }
+
+  void insertIntoComposer(String text) {
+    // ไม่เกินความยาวสูงสุดของข้อความ (นับตามตัวอักษรที่เห็น)
+    if (inputController.text.characters.length + text.characters.length >
+        2000) {
+      showMessage('ข้อความยาวได้ไม่เกิน 2,000 ตัวอักษร');
+      return;
+    }
+
+    chatInsertText(inputController, text);
+  }
+
+  // =====================================================
+  // อีโมจิ
+  // =====================================================
+
+  bool emojiOpen = false;
+
+  void toggleEmoji() {
+    if (emojiOpen) {
+      setState(() => emojiOpen = false);
+      inputFocus.requestFocus();
+      return;
+    }
+
+    inputFocus.unfocus();
+    setState(() => emojiOpen = true);
+  }
+
+  void closeEmoji() {
+    if (emojiOpen) setState(() => emojiOpen = false);
+  }
+
+  // =====================================================
+  // ข้อความเสียง
+  // =====================================================
+
+  ChatVoiceRecorder? recorder;
+
+  Future<void> startVoice() async {
+    if (!canCompose || !roomReady) return;
+
+    closeEmoji();
+
+    if (!await ensureChatPermission(
+      context,
+      Permission.microphone,
+      'ไมโครโฟน',
+    )) {
+      return;
+    }
+
+    if (!mounted) return;
+
+    await ChatVoicePlayer.instance.stop();
+
+    final ChatVoiceRecorder voice = recorder ??= (ChatVoiceRecorder()
+      ..addListener(onRecorderChanged));
+
+    try {
+      await voice.start();
+    } catch (_) {
+      if (mounted) showMessage('เริ่มอัดเสียงไม่สำเร็จ');
+    }
+
+    if (mounted) setState(() {});
+  }
+
+  void sendVoice() {
+    final Map<String, dynamic>? voice = recorder?.take();
+
+    if (voice == null) return;
+
+    ChatVoicePlayer.instance.stop();
+    enqueue({
+      'voice': voice,
+      'temp_paths': [voice['path']],
+    });
+  }
+
+  // =====================================================
+  // เปิดไฟล์ / เล่นเสียงของข้อความ
+  // =====================================================
+
+  // ลิงก์ที่ยังใช้ได้ (ใกล้หมดอายุ → ขอข้อความนี้ใหม่ เซิร์ฟเวอร์ตรวจสิทธิ์อีกครั้ง)
+  Future<String?> freshAttachmentUrl(Map<String, dynamic> message) async {
+    final dynamic attachment = message['attachment'];
+
+    if (attachment is! Map) return null;
+
+    final dynamic received = message['_received_at'];
+    final int lifetime = (attachment['expires_in'] as num?)?.toInt() ?? 600;
+
+    if (received is DateTime &&
+        DateTime.now().difference(received).inSeconds < lifetime - 60) {
+      return attachment['url']?.toString();
+    }
+
+    final int? id = idOf(message);
+
+    if (id == null) return null;
+
+    final Map<String, dynamic> result = await fetchMessage(id);
+
+    if (!mounted || handleLost(result)) return null;
+
+    final dynamic fresh = result['message'];
+
+    if (result['status'] != true ||
+        fresh is! Map ||
+        fresh['attachment'] is! Map) {
+      return null;
+    }
+
+    message['attachment'] = fresh['attachment'];
+    stamp(message);
+
+    return (fresh['attachment'] as Map)['url']?.toString();
+  }
+
+  Future<void> openAttachment(Map<String, dynamic> message) async {
+    String? url;
+
+    try {
+      url = await freshAttachmentUrl(message);
+    } catch (_) {
+      url = null;
+    }
+
+    if (!mounted) return;
+
+    final Uri? uri = url == null ? null : Uri.tryParse(url);
+    bool opened = false;
+
+    if (uri != null) {
+      try {
+        // ดาวน์โหลดผ่านเบราว์เซอร์ด้วยลิงก์ชั่วคราว (หมดอายุใน 10 นาที)
+        opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (_) {
+        opened = false;
+      }
+    }
+
+    if (!opened && mounted) showMessage('เปิดไฟล์ไม่สำเร็จ ลองใหม่อีกครั้ง');
+  }
+
+  String voiceCachePath(Directory dir, int id) =>
+      '${dir.path}/chat_voice_${(draftKey ?? 'room').replaceAll(':', '_')}_$id.m4a';
+
+  // เสียงของข้อความ: ไฟล์ในคิวส่ง / ดาวน์โหลดมาเก็บชั่วคราวในเครื่องแล้วเล่น
+  Future<String?> voicePathOf(Map<String, dynamic> message) async {
+    final dynamic local = message['voice'];
+
+    if (local is Map) return local['path']?.toString();
+
+    final int? id = idOf(message);
+
+    if (id == null) return null;
+
+    final Directory dir = await getTemporaryDirectory();
+    final File file = File(voiceCachePath(dir, id));
+
+    if (await file.exists() && await file.length() > 0) return file.path;
+
+    final String? url = await freshAttachmentUrl(message);
+
+    if (url == null) return null;
+
+    final http.Response response = await http
+        .get(Uri.parse(url))
+        .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode != 200) return null;
+
+    await file.writeAsBytes(response.bodyBytes, flush: true);
+
+    return file.path;
+  }
+
+  // หมดสิทธิ์ห้อง → ลบเสียงที่แอปเก็บไว้ (ไฟล์ที่ผู้ใช้บันทึกเองนอกแอปเรียกคืนไม่ได้)
+  Future<void> clearCachedMedia() async {
+    await ChatVoicePlayer.instance.stop();
+
+    try {
+      final Directory dir = await getTemporaryDirectory();
+
+      for (final message in [...messages, ...pendingNew]) {
+        final int? id = idOf(message);
+
+        if (id != null) {
+          final File file = File(voiceCachePath(dir, id));
+
+          if (await file.exists()) await file.delete();
+        }
+      }
+    } catch (_) {}
+  }
+
+  Widget? buildAttachment(Map<String, dynamic> message, bool mine) {
+    final String? state = message['state']?.toString();
+    final dynamic localFile = message['file'];
+    final dynamic localVoice = message['voice'];
+    final dynamic attachment = message['attachment'];
+
+    if (localFile is Map) {
+      return ChatFileTile(
+        name: localFile['name']?.toString() ?? 'ไฟล์',
+        size: (localFile['size'] as num?)?.toInt() ?? 0,
+        mine: mine,
+        uploading: state == 'sending',
+      );
+    }
+
+    if (localVoice is Map) {
+      return ChatVoiceTile(
+        playKey: 'out:${message['client_id']}',
+        durationMs: (localVoice['duration_ms'] as num?)?.toInt() ?? 0,
+        mine: mine,
+        resolve: () async => localVoice['path']?.toString(),
+      );
+    }
+
+    if (attachment is! Map) return null;
+
+    if (attachment['kind'] == 'voice') {
+      return ChatVoiceTile(
+        playKey: 'msg:${draftKey ?? ''}:${idOf(message)}',
+        durationMs: (attachment['duration_ms'] as num?)?.toInt() ?? 0,
+        mine: mine,
+        resolve: () => voicePathOf(message),
+      );
+    }
+
+    return ChatFileTile(
+      name: attachment['name']?.toString() ?? 'ไฟล์',
+      size: (attachment['size'] as num?)?.toInt() ?? 0,
+      mine: mine,
+      onOpen: () => openAttachment(message),
+    );
   }
 
   Future<void> flushOutbox() async {
@@ -606,8 +1055,10 @@ mixin ChatRoomLogic<T extends StatefulWidget>
           outbox.remove(entry);
 
           // ผลส่งชนกับข้อความจากการดึงข้อความใหม่ → ไม่แสดงซ้ำ
-          addMessages([Map<String, dynamic>.from(sent)]);
+          addMessages([stamp(Map<String, dynamic>.from(sent))]);
         });
+
+        deleteTempFiles(entry);
 
         markReadIfSeen();
         return;
@@ -652,7 +1103,8 @@ mixin ChatRoomLogic<T extends StatefulWidget>
     final String body = entry['body']?.toString() ?? '';
 
     // แก้ไขได้เมื่อช่องพิมพ์ว่าง (ไม่ทับข้อความที่กำลังพิมพ์อยู่)
-    final bool canEdit = !hasDraft;
+    final bool canEdit =
+        !hasDraft && entry['file'] == null && entry['voice'] == null;
 
     final String? action = await showModalBottomSheet<String>(
       context: context,
@@ -737,6 +1189,7 @@ mixin ChatRoomLogic<T extends StatefulWidget>
 
         if (mounted) showMessage('คัดลอกแล้ว');
       case 'discard':
+        deleteTempFiles(entry);
         setState(() => outbox.remove(entry));
     }
   }
@@ -777,9 +1230,15 @@ mixin ChatRoomLogic<T extends StatefulWidget>
 
   Widget leaveGuard({required Widget child}) {
     return PopScope(
-      canPop: outbox.isEmpty,
+      canPop: outbox.isEmpty && !emojiOpen,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) confirmLeave();
+        if (didPop) return;
+
+        if (emojiOpen) {
+          closeEmoji();
+        } else {
+          confirmLeave();
+        }
       },
       child: child,
     );
@@ -1167,6 +1626,9 @@ mixin ChatRoomLogic<T extends StatefulWidget>
       mine ? 'ข้อความของคุณ' : 'ข้อความจาก ${senderNameOf(message)}',
       if (body.isNotEmpty) body,
       if (message['image_url'] != null || message['image'] != null) 'มีรูปภาพ',
+      if (attachmentKindOf(message) == 'file')
+        'ไฟล์ ${attachmentNameOf(message)}',
+      if (attachmentKindOf(message) == 'voice') 'ข้อความเสียง',
       if (time != null) 'เวลา ${ChatFormat.time(time)}',
       if (status.isNotEmpty) status,
       if (reactions.isNotEmpty)
@@ -1182,7 +1644,7 @@ mixin ChatRoomLogic<T extends StatefulWidget>
       showSenderName: isGroup && !mine && startOfRun,
       showAvatar: isGroup && !mine && endOfRun,
       reserveAvatarSpace: isGroup && !mine,
-      image: buildMessageImage(message),
+      image: buildMessageImage(message) ?? buildAttachment(message, mine),
       header: reply is Map
           ? ChatReplyPreview(
               reply: Map<String, dynamic>.from(reply),
@@ -1360,15 +1822,25 @@ mixin ChatRoomLogic<T extends StatefulWidget>
 
     if (!canCompose) return disabled ?? const SizedBox.shrink();
 
+    final ChatVoiceRecorder? voice = recorder;
+
+    // กำลังอัด / ฟังก่อนส่ง → แถบอัดเสียงแทนช่องพิมพ์ (ข้อความที่พิมพ์ไว้ยังอยู่)
+    if (voice != null && voice.active) {
+      return ChatVoiceRecorderBar(recorder: voice, onSend: sendVoice);
+    }
+
     final Map<String, dynamic>? reply = replyingTo;
 
-    return ChatComposer(
+    final Widget composer = ChatComposer(
       controller: inputController,
       focusNode: inputFocus,
       image: pickedImage,
       canSend: hasDraft,
       hint: hint,
-      onPickImage: pickImage,
+      onAttach: openAttachMenu,
+      onMic: startVoice,
+      onEmoji: toggleEmoji,
+      emojiOpen: emojiOpen,
       onRemoveImage: () => setState(() => pickedImage = null),
       onSend: send,
       top: reply == null
@@ -1380,6 +1852,16 @@ mixin ChatRoomLogic<T extends StatefulWidget>
               preview: previewText(reply),
               onCancel: () => setState(() => replyingTo = null),
             ),
+    );
+
+    if (!emojiOpen) return composer;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        composer,
+        ChatEmojiPanel(onPick: insertIntoComposer),
+      ],
     );
   }
 }

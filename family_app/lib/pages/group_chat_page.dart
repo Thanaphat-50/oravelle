@@ -123,8 +123,16 @@ class _GroupChatPageState extends State<GroupChatPage>
       imagePath: (entry['image'] as XFile?)?.path,
       clientId: entry['client_id'] as String,
       replyToId: entry['reply_to_id'] as int?,
+      filePath: (entry['file'] as Map?)?['path'] as String?,
+      fileName: (entry['file'] as Map?)?['name'] as String?,
+      voicePath: (entry['voice'] as Map?)?['path'] as String?,
+      voiceDurationMs: (entry['voice'] as Map?)?['duration_ms'] as int?,
     );
   }
+
+  @override
+  Future<Map<String, dynamic>> fetchMessage(int messageId) =>
+      GroupChatService.message(chatId!, messageId);
 
   @override
   Future<Map<String, dynamic>> reactOnServer(int messageId, String? emoji) =>
@@ -209,6 +217,7 @@ class _GroupChatPageState extends State<GroupChatPage>
     }
 
     pollTimer?.cancel();
+    clearCachedMedia();
 
     setState(() {
       lostAccess =

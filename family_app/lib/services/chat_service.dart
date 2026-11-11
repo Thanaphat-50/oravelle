@@ -146,11 +146,15 @@ class ChatService {
     String? imagePath,
     String? clientId,
     int? replyToId,
+    String? filePath,
+    String? fileName,
+    String? voicePath,
+    int? voiceDurationMs,
   }) async {
     final Uri uri = Uri.parse('$baseUrl/chats/$conversationId/messages');
 
     // ข้อความล้วน: JSON
-    if (imagePath == null) {
+    if (imagePath == null && filePath == null && voicePath == null) {
       final headers = await _headers();
 
       final response = await ApiHelper.request(
@@ -184,7 +188,26 @@ class ChatService {
       request.fields['reply_to_id'] = '$replyToId';
     }
 
-    request.files.add(await http.MultipartFile.fromPath('image', imagePath));
+    if (imagePath != null) {
+      request.files.add(await http.MultipartFile.fromPath('image', imagePath));
+    }
+
+    if (filePath != null) {
+      request.files.add(
+        await http.MultipartFile.fromPath('file', filePath, filename: fileName),
+      );
+    }
+
+    if (voicePath != null) {
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'voice',
+          voicePath,
+          filename: 'voice.m4a',
+        ),
+      );
+      request.fields['voice_duration_ms'] = '${voiceDurationMs ?? 0}';
+    }
 
     final response = await ApiHelper.request(
       () async => http.Response.fromStream(await request.send()),
@@ -192,8 +215,25 @@ class ChatService {
     );
 
     if (response.statusCode == 413) {
-      return {'status': false, 'message': 'รูปมีขนาดใหญ่เกินไป'};
+      return {'status': false, 'message': 'ไฟล์มีขนาดใหญ่เกินไป'};
     }
+
+    return ApiHelper.decode(response);
+  }
+
+  // ข้อความเดียว (ลิงก์ไฟล์/เสียงใหม่เมื่อลิงก์เดิมหมดอายุ)
+  static Future<Map<String, dynamic>> message(
+    int conversationId,
+    int messageId,
+  ) async {
+    final headers = await _headers();
+
+    final response = await ApiHelper.request(
+      () => http.get(
+        Uri.parse('$baseUrl/chats/$conversationId/messages/$messageId'),
+        headers: headers,
+      ),
+    );
 
     return ApiHelper.decode(response);
   }

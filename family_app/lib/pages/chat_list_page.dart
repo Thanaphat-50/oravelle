@@ -182,7 +182,7 @@ class _ChatListPageState extends State<ChatListPage> {
 
     final String text = body.isNotEmpty
         ? body
-        : (last['has_image'] == true ? '📷 รูปภาพ' : '');
+        : (last['attachment_kind'] == 'voice' ? '🎤 ข้อความเสียง' : last['attachment_kind'] == 'file' ? '📎 ไฟล์' : last['has_image'] == true ? '📷 รูปภาพ' : '');
 
     return last['is_mine'] == true ? 'คุณ: $text' : text;
   }
@@ -217,7 +217,7 @@ class _ChatListPageState extends State<ChatListPage> {
           : (last['sender_name']?.toString() ?? 'สมาชิก');
       final String text =
           last['body']?.toString() ??
-          (last['has_image'] == true ? '📷 รูปภาพ' : '');
+          (last['attachment_kind'] == 'voice' ? '🎤 ข้อความเสียง' : last['attachment_kind'] == 'file' ? '📎 ไฟล์' : last['has_image'] == true ? '📷 รูปภาพ' : '');
       preview = '$who: $text';
     }
 
