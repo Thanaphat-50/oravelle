@@ -650,7 +650,7 @@ class ChatController extends Controller
     {
         $conversationId = (int) $conversation->id;
 
-        return ChatExtras::prepare(
+        $extras = ChatExtras::prepare(
             $messages,
             ChatMessage::class,
             ChatMessageReaction::class,
@@ -658,6 +658,15 @@ class ChatController extends Controller
             $me,
             fn (ChatMessage $source) => (int) $source->conversation_id === $conversationId
         );
+
+        // ลูกค้าเห็นเจ้าของร้านเป็นชื่อร้านเหมือนหัวห้อง (ข้อความอ้างอิงไม่เผยชื่อส่วนตัว)
+        $shop = $conversation->shop;
+
+        if ($shop && (int) $shop->user_id !== (int) $me->id) {
+            $extras['names'][(int) $shop->user_id] = $shop->name;
+        }
+
+        return $extras;
     }
 
     // Reaction ของข้อความที่แอปโหลดไว้แล้ว (ตอนดึงข้อความใหม่) — ชุดเดียว ไม่ยิงทีละข้อความ

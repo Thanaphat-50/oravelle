@@ -59,6 +59,8 @@ class GroupChatService {
     int chatId, {
     int? beforeId,
     int? afterId,
+    // สถานะ (Reaction / อ่านแล้ว X คน) ของข้อความที่โหลดไว้แล้ว ตั้งแต่ id นี้
+    int? statesFrom,
   }) async {
     final headers = await _headers();
 
@@ -66,6 +68,7 @@ class GroupChatService {
       queryParameters: {
         if (beforeId != null) 'before_id': '$beforeId',
         if (afterId != null) 'after_id': '$afterId',
+        if (statesFrom != null) 'states_from': '$statesFrom',
       },
     );
 
@@ -95,6 +98,7 @@ class GroupChatService {
     String? body,
     String? imagePath,
     required String clientId,
+    int? replyToId,
   }) async {
     final Uri uri = Uri.parse('$baseUrl/group-chats/$chatId/messages');
 
@@ -105,7 +109,11 @@ class GroupChatService {
         () => http.post(
           uri,
           headers: headers,
-          body: jsonEncode({'body': body, 'client_id': clientId}),
+          body: jsonEncode({
+            'body': body,
+            'client_id': clientId,
+            'reply_to_id': ?replyToId,
+          }),
         ),
       );
 
@@ -115,6 +123,8 @@ class GroupChatService {
     final request = http.MultipartRequest('POST', uri)
       ..headers.addAll(await _headers(json: false))
       ..fields['client_id'] = clientId;
+
+    if (replyToId != null) request.fields['reply_to_id'] = '$replyToId';
 
     if (body != null && body.trim().isNotEmpty) {
       request.fields['body'] = body;
@@ -144,6 +154,26 @@ class GroupChatService {
         headers: headers,
         body: jsonEncode({'message_id': messageId}),
       ),
+    );
+
+    return _decode(response);
+  }
+
+  // Reaction ของเรา: emoji = ตั้ง / null = ถอน (ส่งซ้ำได้ ผลเหมือนเดิม)
+  static Future<Map<String, dynamic>> react(
+    int chatId,
+    int messageId,
+    String? emoji,
+  ) async {
+    final headers = await _headers();
+    final Uri uri = Uri.parse(
+      '$baseUrl/group-chats/$chatId/messages/$messageId/reaction',
+    );
+
+    final response = await ApiHelper.request(
+      () => emoji == null
+          ? http.delete(uri, headers: headers)
+          : http.put(uri, headers: headers, body: jsonEncode({'emoji': emoji})),
     );
 
     return _decode(response);

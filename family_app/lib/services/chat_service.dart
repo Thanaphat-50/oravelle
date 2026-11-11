@@ -112,10 +112,14 @@ class ChatService {
   }
 
   // afterId: ข้อความใหม่กว่านี้ / beforeId: ข้อความเก่ากว่านี้
+  // markRead: false = โหลดเฉย ๆ ไม่นับว่าอ่าน (หน้าแชทแจ้งอ่านเองผ่าน markRead เมื่อแสดงจริง)
+  // statesFrom: Reaction ของข้อความที่โหลดไว้แล้ว ตั้งแต่ id นี้ (ใช้ตอนดึงข้อความใหม่)
   static Future<Map<String, dynamic>> getMessages(
     int conversationId, {
     int? afterId,
     int? beforeId,
+    bool markRead = true,
+    int? statesFrom,
   }) async {
     final headers = await _headers();
 
@@ -123,6 +127,8 @@ class ChatService {
       queryParameters: {
         if (afterId != null) 'after_id': '$afterId',
         if (beforeId != null) 'before_id': '$beforeId',
+        if (!markRead) 'mark_read': '0',
+        if (statesFrom != null) 'states_from': '$statesFrom',
       },
     );
 
@@ -139,6 +145,7 @@ class ChatService {
     String? body,
     String? imagePath,
     String? clientId,
+    int? replyToId,
   }) async {
     final Uri uri = Uri.parse('$baseUrl/chats/$conversationId/messages');
 
@@ -150,7 +157,11 @@ class ChatService {
         () => http.post(
           uri,
           headers: headers,
-          body: jsonEncode({'body': body, 'client_id': ?clientId}),
+          body: jsonEncode({
+            'body': body,
+            'client_id': ?clientId,
+            'reply_to_id': ?replyToId,
+          }),
         ),
       );
 
@@ -169,6 +180,10 @@ class ChatService {
       request.fields['client_id'] = clientId;
     }
 
+    if (replyToId != null) {
+      request.fields['reply_to_id'] = '$replyToId';
+    }
+
     request.files.add(await http.MultipartFile.fromPath('image', imagePath));
 
     final response = await ApiHelper.request(
@@ -179,6 +194,51 @@ class ChatService {
     if (response.statusCode == 413) {
       return {'status': false, 'message': 'รูปมีขนาดใหญ่เกินไป'};
     }
+
+    return ApiHelper.decode(response);
+  }
+
+  // อ่านถึงข้อความนี้ (เซิร์ฟเวอร์ไม่ถอยตำแหน่งอ่าน ใช้หลายเครื่องพร้อมกันได้)
+  static Future<Map<String, dynamic>> markRead(
+    int conversationId,
+    int messageId,
+  ) async {
+    final headers = await _headers();
+
+    final response = await ApiHelper.request(
+      () => http.post(
+        Uri.parse('$baseUrl/chats/$conversationId/read'),
+        headers: headers,
+        body: jsonEncode({'message_id': messageId}),
+      ),
+    );
+
+    final result = ApiHelper.decode(response);
+    final dynamic count = result['unread_count'];
+
+    if (result['status'] == true && count is num) {
+      unreadCount.value = count.toInt();
+    }
+
+    return result;
+  }
+
+  // Reaction ของเรา: emoji = ตั้ง/เปลี่ยน / null = ถอน (ส่งซ้ำได้ ผลเหมือนเดิม)
+  static Future<Map<String, dynamic>> react(
+    int conversationId,
+    int messageId,
+    String? emoji,
+  ) async {
+    final headers = await _headers();
+    final Uri uri = Uri.parse(
+      '$baseUrl/chats/$conversationId/messages/$messageId/reaction',
+    );
+
+    final response = await ApiHelper.request(
+      () => emoji == null
+          ? http.delete(uri, headers: headers)
+          : http.put(uri, headers: headers, body: jsonEncode({'emoji': emoji})),
+    );
 
     return ApiHelper.decode(response);
   }

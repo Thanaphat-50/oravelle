@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\ChatMessageReaction;
 use App\Models\FamilyMember;
 use App\Models\GroupChatMessageReaction;
+use App\Models\Shop;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -128,6 +129,35 @@ class ChatReplyReactionTest extends TestCase
         $reply = collect($response->json('messages'))->firstWhere('body', 'ได้เลย');
         $this->assertSame(['available' => false], $reply['reply_to']);
         $this->assertStringNotContainsString('ซื้อนมด้วยนะ', $response->getContent());
+    }
+
+    public function test_shop_reply_preview_shows_shop_name_not_owners_name_to_customer(): void
+    {
+        $owner = User::factory()->create(['name' => 'ชื่อจริงเจ้าของร้าน']);
+        $customer = User::factory()->create();
+        $shop = Shop::create([
+            'user_id' => $owner->id,
+            'name' => 'ร้านป้าแดง',
+            'category' => 'clothing',
+            'phone' => '0812345678',
+            'province' => 'เชียงใหม่',
+            'status' => Shop::STATUS_ACTIVE,
+            'delivery_methods' => ['shipping'],
+            'payment_methods' => ['cod'],
+        ]);
+
+        Sanctum::actingAs($customer);
+        $room = $this->postJson('/api/chats', ['shop_id' => $shop->id])->assertSuccessful()->json('conversation.id');
+
+        $source = $this->sendPrivate($owner, $room, 'สวัสดีค่ะ')->assertCreated()->json('message.id');
+        $reply = $this->sendPrivate($customer, $room, 'ขอดูสินค้าค่ะ', $source)->assertCreated();
+
+        $reply->assertJsonPath('message.reply_to.sender_name', 'ร้านป้าแดง');
+        $this->assertStringNotContainsString('ชื่อจริงเจ้าของร้าน', $reply->getContent());
+
+        // เจ้าของร้านเห็นชื่อลูกค้าตามปกติ
+        $back = $this->sendPrivate($owner, $room, 'ได้เลยค่ะ', $reply->json('message.id'))->assertCreated();
+        $back->assertJsonPath('message.reply_to.sender_name', $customer->name);
     }
 
     public function test_group_reply_respects_each_viewers_history(): void
