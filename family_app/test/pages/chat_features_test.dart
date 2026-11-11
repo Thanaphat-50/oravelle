@@ -270,6 +270,37 @@ void main() {
     }, () => MockClient(server.handle));
   });
 
+  testWidgets('swipe to reply still works with reduce motion on', (
+    tester,
+  ) async {
+    final server = FakeServer([msg(1, 'มาไหม')]);
+
+    await http.runWithClient(() async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(disableAnimations: true),
+            child: ChatRoomPage(conversationId: 1),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump();
+
+      // ปัดช้า ๆ ทีละน้อย (หลายช่วง) ต้องสะสมระยะได้แม้ฟองไม่เลื่อนตาม
+      await tester.timedDrag(
+        find.text('มาไหม'),
+        const Offset(140, 0),
+        const Duration(milliseconds: 400),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('ตอบกลับ ลูก'), findsOneWidget);
+
+      await close(tester);
+    }, () => MockClient(server.handle));
+  });
+
   testWidgets('reaction shows at once and rolls back when saving fails', (
     tester,
   ) async {

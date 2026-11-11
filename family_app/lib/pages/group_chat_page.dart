@@ -95,7 +95,7 @@ class _GroupChatPageState extends State<GroupChatPage>
 
       chatId = (openedRoom['id'] as num).toInt();
       GroupChatService.activeChatId = chatId;
-      restoreDraftIfEmpty();
+      if (mounted) restoreDraftIfEmpty();
     }
 
     return GroupChatService.messages(chatId!);

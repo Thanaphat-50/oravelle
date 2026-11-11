@@ -827,7 +827,8 @@ class _SwipeToReplyState extends State<SwipeToReply> {
           onReply();
         }
 
-        if (!reduceMotion) setState(() => dx = next);
+        // ระยะปัดสะสมเสมอ (ลดการเคลื่อนไหว: ฟองไม่เลื่อนตาม แต่ยังตอบกลับได้)
+        setState(() => dx = next);
       },
       onHorizontalDragEnd: (_) => reset(),
       onHorizontalDragCancel: reset,
@@ -839,7 +840,10 @@ class _SwipeToReplyState extends State<SwipeToReply> {
               padding: const EdgeInsets.only(left: 8),
               child: Icon(Icons.reply_rounded, color: AppColors.primary),
             ),
-          Transform.translate(offset: Offset(dx, 0), child: widget.child),
+          Transform.translate(
+            offset: Offset(reduceMotion ? 0 : dx, 0),
+            child: widget.child,
+          ),
         ],
       ),
     );
