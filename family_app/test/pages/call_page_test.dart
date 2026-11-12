@@ -166,6 +166,8 @@ void main() {
 
         expect(find.text('วิดีโอคอลเข้า'), findsOneWidget);
         expect(find.text('แม่'), findsOneWidget);
+        // ชื่ออยู่กลางจอ (จอทดสอบกว้าง 800)
+        expect(tester.getCenter(find.text('แม่')).dx, closeTo(400, 1));
 
         await tester.tap(find.text('รับสาย'));
         for (int i = 0; i < 6; i++) {

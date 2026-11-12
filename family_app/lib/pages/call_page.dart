@@ -541,55 +541,58 @@ class _CallPageState extends State<CallPage> {
         body: Stack(
           children: [
             if (remote != null) Positioned.fill(child: remote),
-            SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 32, 20, 24),
-                child: Column(
-                  children: [
-                    if (remote == null) ...[
-                      UserAvatar(
-                        user: {
-                          'name': name,
-                          'profile_photo_url': other['profile_image_url'],
-                        },
-                        radius: 52,
-                      ),
-                      const SizedBox(height: 18),
-                    ],
-                    Text(
-                      name,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        shadows: [Shadow(blurRadius: 6)],
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Semantics(
-                      liveRegion: true,
-                      child: Text(
-                        statusText,
+            // เต็มจอ → ชื่อ/สถานะ/ปุ่มอยู่กลางจอ
+            Positioned.fill(
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 32, 20, 24),
+                  child: Column(
+                    children: [
+                      if (remote == null) ...[
+                        UserAvatar(
+                          user: {
+                            'name': name,
+                            'profile_photo_url': other['profile_image_url'],
+                          },
+                          radius: 52,
+                        ),
+                        const SizedBox(height: 18),
+                      ],
+                      Text(
+                        name,
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.85),
-                          fontSize: 16,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                          shadows: const [Shadow(blurRadius: 6)],
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          shadows: [Shadow(blurRadius: 6)],
                         ),
                       ),
-                    ),
-                    const Spacer(),
-                    Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 18,
-                      runSpacing: 16,
-                      children: controls(),
-                    ),
-                  ],
+                      const SizedBox(height: 6),
+                      Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          statusText,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.85),
+                            fontSize: 16,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                            shadows: const [Shadow(blurRadius: 6)],
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 18,
+                        runSpacing: 16,
+                        children: controls(),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
