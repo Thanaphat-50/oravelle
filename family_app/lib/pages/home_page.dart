@@ -1607,8 +1607,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         buildCollapsible(
           visible: !immersive,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            padding: const EdgeInsets.fromLTRB(8, 2, 8, 0),
             child: SectionSwitch<CommunityFeedMode>(
+              // แท็บเส้นใต้ (Clean underline)
+              underline: true,
               value: homeMode,
               options: const [
                 SectionOption(
