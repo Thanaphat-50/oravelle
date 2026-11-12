@@ -39,6 +39,9 @@ class SessionCheck {
 class AuthService {
   static const String baseUrl = ApiConfig.baseUrl;
 
+  // บัญชีที่เข้าสู่ระบบอยู่ (จากการตรวจเซสชัน) — แยกการตั้งค่าในเครื่องตามบัญชี เช่น พื้นหลังแชท
+  static int? currentUserId;
+
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
 
   static const String _tokenKey = 'token';
@@ -123,6 +126,8 @@ class AuthService {
 
   // เช่น เข้าสู่ระบบด้วย Google / LINE / Facebook
   static Future<void> saveToken(String token) async {
+    // token ใหม่อาจเป็นบัญชีอื่น → ถามเซิร์ฟเวอร์ใหม่เมื่อใช้
+    currentUserId = null;
     await _storage.write(key: _tokenKey, value: token);
   }
 
@@ -131,7 +136,17 @@ class AuthService {
   }
 
   static Future<void> clearToken() async {
+    currentUserId = null;
     await _storage.delete(key: _tokenKey);
+  }
+
+  // รหัสบัญชีที่เข้าสู่ระบบอยู่ (ยังไม่รู้ → ตรวจเซสชันหนึ่งครั้ง / ไม่ได้เข้าสู่ระบบ = null)
+  static Future<int?> userId() async {
+    if (currentUserId != null) return currentUserId;
+
+    final SessionCheck check = await checkSession();
+
+    return check.state == SessionState.signedIn ? currentUserId : null;
   }
 
   // =====================================================
@@ -169,6 +184,8 @@ class AuthService {
       final data = ApiHelper.decode(response, session: false);
 
       if (response.statusCode == 200 && data['id'] != null) {
+        currentUserId = (data['id'] as num?)?.toInt();
+
         return SessionCheck(SessionState.signedIn, user: data);
       }
 

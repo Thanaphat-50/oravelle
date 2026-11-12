@@ -395,6 +395,20 @@ class _ChatRoomPageState extends State<ChatRoomPage>
                 icon: const Icon(Icons.videocam_outlined),
               ),
             ],
+            PopupMenuButton<String>(
+              tooltip: 'ตัวเลือกห้อง',
+              onSelected: (_) => openBackgroundSettings(),
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'background',
+                  child: ListTile(
+                    leading: Icon(Icons.wallpaper_rounded),
+                    title: Text('พื้นหลังแชท'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
         body: Column(

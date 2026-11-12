@@ -11,8 +11,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../pages/chat_background_page.dart';
 import '../pages/chat_photo_preview_page.dart';
 import '../services/api_helper.dart';
+import '../services/auth_service.dart';
+import '../services/chat_background_store.dart';
 import '../theme/app_theme.dart';
 import 'chat_media.dart';
 import 'chat_widgets.dart';
@@ -317,6 +320,7 @@ mixin ChatRoomLogic<T extends StatefulWidget>
         });
 
         WidgetsBinding.instance.addPostFrameCallback((_) => markReadIfSeen());
+        loadBackground();
       } else {
         setState(
           () => loadError = result['message']?.toString() ?? loadFailedText,
@@ -791,6 +795,72 @@ mixin ChatRoomLogic<T extends StatefulWidget>
     }
 
     chatInsertText(inputController, text);
+  }
+
+  // =====================================================
+  // พื้นหลังแชท (ส่วนตัว ต่อบัญชี + ห้อง เก็บในเครื่องนี้)
+  // =====================================================
+
+  ChatBackground? background;
+
+  Future<void> loadBackground() async {
+    final String? key = draftKey;
+
+    if (key == null) return;
+
+    try {
+      final int? userId = await AuthService.userId();
+
+      if (userId == null) return;
+
+      final ChatBackground? value = await ChatBackgroundStore.load(userId, key);
+
+      if (mounted && value != background) setState(() => background = value);
+    } catch (_) {
+      // อ่านไม่ได้ → พื้นหลังเริ่มต้น
+    }
+  }
+
+  Future<void> openBackgroundSettings() async {
+    final String? key = draftKey;
+    int? userId;
+
+    try {
+      userId = await AuthService.userId();
+    } catch (_) {
+      userId = null;
+    }
+
+    if (!mounted) return;
+
+    if (key == null || userId == null) {
+      showMessage('ยังตั้งพื้นหลังไม่ได้ ลองใหม่อีกครั้ง');
+      return;
+    }
+
+    final bool? changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ChatBackgroundPage(
+          userId: userId!,
+          roomKey: key,
+          initial: background,
+        ),
+      ),
+    );
+
+    // บันทึก/คืนค่าเริ่มต้นแล้ว → โหลดพื้นหลังของห้องนี้ใหม่
+    if (changed == true) await loadBackground();
+  }
+
+  Widget withBackground(Widget child) {
+    if (background == null) return child;
+
+    return Stack(
+      children: [
+        Positioned.fill(child: ChatBackgroundLayer(background: background)),
+        child,
+      ],
+    );
   }
 
   // =====================================================
@@ -1710,7 +1780,7 @@ mixin ChatRoomLogic<T extends StatefulWidget>
       );
     }
 
-    if (messages.isEmpty && outbox.isEmpty) return empty;
+    if (messages.isEmpty && outbox.isEmpty) return withBackground(empty);
 
     final List<Map<String, dynamic>> shown = [...messages, ...outbox];
     final int? dividerId = firstUnreadId();
@@ -1761,6 +1831,7 @@ mixin ChatRoomLogic<T extends StatefulWidget>
 
     return Stack(
       children: [
+        Positioned.fill(child: ChatBackgroundLayer(background: background)),
         ListView(
           controller: scrollController,
           reverse: true,

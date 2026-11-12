@@ -405,6 +405,21 @@ class _GroupChatPageState extends State<GroupChatPage>
                       : Icons.notifications_active_outlined,
                 ),
               ),
+            if (room != null)
+              PopupMenuButton<String>(
+                tooltip: 'ตัวเลือกห้อง',
+                onSelected: (_) => openBackgroundSettings(),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'background',
+                    child: ListTile(
+                      leading: Icon(Icons.wallpaper_rounded),
+                      title: Text('พื้นหลังแชท'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
         body: Column(
