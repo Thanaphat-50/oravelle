@@ -201,11 +201,11 @@ void main() {
         await tester.tap(find.byTooltip('แนบรูป ไฟล์ หรือลิงก์'));
         await tester.pumpAndSettle();
 
-        for (final label in ['ถ่ายรูป', 'เลือกรูป', 'ส่งไฟล์', 'แชร์ลิงก์']) {
+        for (final label in ['กล้อง', 'รูปภาพ', 'ไฟล์', 'ลิงก์']) {
           expect(find.text(label), findsOneWidget);
         }
 
-        await tester.tap(find.text('แชร์ลิงก์'));
+        await tester.tap(find.text('ลิงก์'));
         await tester.pumpAndSettle();
 
         await tester.enterText(

@@ -93,7 +93,7 @@ class _ChatRoomPageState extends State<ChatRoomPage>
           : 'ร้านค้า · แชทกับร้าน';
     }
 
-    return canCompose ? 'สมาชิกในกลุ่ม · แชทส่วนตัว' : 'แชทส่วนตัว';
+    return canCompose ? 'สมาชิกในครอบครัว' : 'แชทส่วนตัว';
   }
 
   int get otherReadId {
@@ -185,6 +185,11 @@ class _ChatRoomPageState extends State<ChatRoomPage>
 
     return value is num ? value.toInt() : null;
   }
+
+  // รูปอีกฝ่ายข้างข้อความแรกของแต่ละชุด
+  @override
+  Map<String, dynamic>? avatarOf(Map<String, dynamic> message) =>
+      message['is_mine'] == true ? null : otherAvatar;
 
   @override
   Object? senderOf(Map<String, dynamic> message) =>

@@ -89,16 +89,16 @@ class ChatDayDivider extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Center(
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
           decoration: BoxDecoration(
-            color: AppColors.fill,
+            color: AppColors.softPrimary,
             borderRadius: BorderRadius.circular(99),
           ),
           child: Text(
             ChatFormat.dayLabel(day),
             style: TextStyle(
-              color: AppColors.muted,
-              fontSize: 12,
+              color: AppColors.primary,
+              fontSize: 12.5,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -163,12 +163,12 @@ class ChatNewMessagesButton extends StatelessWidget {
   }
 }
 
-// ฟองข้อความ: มุมโค้ง "หาง" เฉพาะข้อความสุดท้ายของชุด / ระยะห่างแคบในชุดเดียวกัน
+// ฟองข้อความ (Lavender): มุมโค้งเท่ากัน / ข้อความอ้างอิงอยู่ในฟอง / รูปผู้ส่งชิดบนข้างข้อความแรกของชุด
 class ChatBubble extends StatelessWidget {
   final bool mine;
   final String body;
 
-  // กลุ่ม: ชื่อและรูปผู้ส่ง (ข้อความของคนอื่น) — แสดงเฉพาะข้อความแรก/สุดท้ายของชุด
+  // ข้อความของคนอื่น: ชื่อ (กลุ่ม) และรูปผู้ส่ง — แสดงเฉพาะข้อความแรกของชุด
   final String? senderName;
   final Map<String, dynamic>? senderAvatar;
   final bool showSenderName;
@@ -180,6 +180,10 @@ class ChatBubble extends StatelessWidget {
   final Widget? below;
   final String? footer;
   final Color? footerColor;
+
+  // ไอคอนสถานะหลังเวลา (✓ ส่งแล้ว / ✓✓ อ่านแล้ว)
+  final IconData? footerIcon;
+  final Color? footerIconColor;
   final bool endOfRun;
   final bool dim;
   final bool highlight;
@@ -202,6 +206,8 @@ class ChatBubble extends StatelessWidget {
     this.below,
     this.footer,
     this.footerColor,
+    this.footerIcon,
+    this.footerIconColor,
     this.endOfRun = true,
     this.dim = false,
     this.highlight = false,
@@ -212,8 +218,22 @@ class ChatBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool reduceMotion = MediaQuery.of(context).disableAnimations;
-    const Radius round = Radius.circular(18);
-    const Radius tail = Radius.circular(5);
+    final TextStyle textStyle = TextStyle(
+      color: mine ? Colors.white : AppColors.navy,
+      fontSize: 15,
+      height: 1.4,
+    );
+
+    // มีลิงก์ → ให้โปรแกรมอ่านหน้าจอแตะลิงก์ได้ / ไม่มี → ป้ายของฟองอ่านให้แล้ว
+    final Widget? text = body.isEmpty
+        ? null
+        : chatLinkPattern.hasMatch(body)
+        ? ChatLinkText(
+            text: body,
+            linkColor: mine ? Colors.white : AppColors.primary,
+            style: textStyle,
+          )
+        : ExcludeSemantics(child: Text(body, style: textStyle));
 
     final Widget column = Column(
       crossAxisAlignment: mine
@@ -234,58 +254,67 @@ class ChatBubble extends StatelessWidget {
               ),
             ),
           ),
-        ?header,
+        // ไม่มีข้อความ (เช่น ตอบกลับด้วยรูป) → กรอบอ้างอิงอยู่เหนือรูป
+        if (text == null) ?header,
         if (image != null)
           Padding(padding: const EdgeInsets.only(bottom: 3), child: image),
-        if (body.isNotEmpty)
+        if (text != null)
           Container(
-            padding: const EdgeInsets.fromLTRB(14, 9, 14, 10),
+            padding: header == null
+                ? const EdgeInsets.fromLTRB(14, 9, 14, 10)
+                : const EdgeInsets.fromLTRB(8, 8, 14, 10),
             decoration: BoxDecoration(
               color: mine ? AppColors.primary : AppColors.surface,
               border: mine ? null : AppDecorations.cardBorder,
-              borderRadius: BorderRadius.only(
-                topLeft: round,
-                topRight: round,
-                bottomLeft: mine || !endOfRun ? round : tail,
-                bottomRight: mine && endOfRun ? tail : round,
-              ),
+              boxShadow: mine ? null : AppDecorations.cardShadow,
+              borderRadius: BorderRadius.circular(18),
             ),
-            // มีลิงก์ → ให้โปรแกรมอ่านหน้าจอแตะลิงก์ได้ / ไม่มี → ป้ายของฟองอ่านให้แล้ว
-            child: chatLinkPattern.hasMatch(body)
-                ? ChatLinkText(
-                    text: body,
-                    linkColor: mine ? Colors.white : AppColors.primary,
-                    style: TextStyle(
-                      color: mine ? Colors.white : AppColors.navy,
-                      fontSize: 15,
-                      height: 1.4,
-                    ),
-                  )
-                : ExcludeSemantics(
-                    child: Text(
-                      body,
-                      style: TextStyle(
-                        color: mine ? Colors.white : AppColors.navy,
-                        fontSize: 15,
-                        height: 1.4,
-                      ),
-                    ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (header != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: header,
                   ),
+                Padding(
+                  padding: EdgeInsets.only(left: header == null ? 0 : 6),
+                  child: text,
+                ),
+              ],
+            ),
           ),
         ?below,
         if (footer != null && footer!.isNotEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(6, 3, 6, 0),
             child: ExcludeSemantics(
-              child: Text(
-                footer!,
-                style: TextStyle(
-                  color: footerColor ?? AppColors.muted,
-                  fontSize: 11,
-                  fontWeight: footerColor == null
-                      ? FontWeight.w500
-                      : FontWeight.w700,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ตัวอักษรใหญ่/จอแคบ → ขึ้นบรรทัดใหม่ได้ ไม่ล้นขอบ
+                  Flexible(
+                    child: Text(
+                      footer!,
+                      style: TextStyle(
+                        color: footerColor ?? AppColors.muted,
+                        fontSize: 11.5,
+                        fontWeight: footerColor == null
+                            ? FontWeight.w500
+                            : FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  if (footerIcon != null) ...[
+                    const SizedBox(width: 3),
+                    Icon(
+                      footerIcon,
+                      size: 15,
+                      color: footerIconColor ?? AppColors.muted,
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
@@ -303,27 +332,29 @@ class ChatBubble extends StatelessWidget {
         color: highlight
             ? AppColors.primary.withValues(alpha: 0.12)
             : Colors.transparent,
-        padding: EdgeInsets.only(bottom: endOfRun ? 10 : 2),
+        padding: EdgeInsets.only(bottom: endOfRun ? 12 : 3),
         child: Row(
           mainAxisAlignment: mine
               ? MainAxisAlignment.end
               : MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (!mine && reserveAvatarSpace)
               Padding(
                 padding: EdgeInsets.only(
-                  right: 6,
-                  bottom: footer == null ? 0 : 18,
+                  right: 8,
+                  top: showSenderName && senderName != null ? 18 : 0,
                 ),
                 child: showAvatar && senderAvatar != null
-                    ? UserAvatar(user: senderAvatar, radius: 15)
-                    : const SizedBox(width: 30),
+                    ? ExcludeSemantics(
+                        child: UserAvatar(user: senderAvatar, radius: 18),
+                      )
+                    : const SizedBox(width: 36),
               ),
             Flexible(
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.74,
+                  maxWidth: MediaQuery.of(context).size.width * 0.72,
                 ),
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -340,7 +371,8 @@ class ChatBubble extends StatelessWidget {
   }
 }
 
-// ช่องพิมพ์: มุมโค้ง ขยายได้สูงสุด 5 บรรทัด / ปุ่มแนบรูป / ปุ่มส่งแสดงสถานะ / รูปตัวอย่างก่อนส่ง
+// ช่องพิมพ์ (Lavender): ปุ่มแนบ + ช่องพิมพ์ขอบมน (ปุ่มอีโมจิด้านใน) + ปุ่มส่ง/ไมค์วงกลม
+// ช่องพิมพ์ว่าง → ปุ่มไมค์ / มีข้อความหรือรูป → ปุ่มส่ง / ขยายได้ 5 บรรทัด / รูปตัวอย่างก่อนส่ง
 class ChatComposer extends StatelessWidget {
   final TextEditingController controller;
   final XFile? image;
@@ -351,8 +383,6 @@ class ChatComposer extends StatelessWidget {
   final VoidCallback onSend;
   final Widget? top;
   final FocusNode? focusNode;
-
-  // ช่องพิมพ์ว่าง → ปุ่มไมค์แทนปุ่มส่ง / ปุ่มอีโมจิสลับกับแป้นพิมพ์
   final VoidCallback? onMic;
   final VoidCallback? onEmoji;
   final bool emojiOpen;
@@ -376,19 +406,21 @@ class ChatComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final XFile? picked = image;
+    final OutlineInputBorder border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(24),
+      borderSide: BorderSide(color: AppColors.border),
+    );
+    final bool showMic = !canSend && onMic != null;
 
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(4, 6, 6, 6),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(26),
-            border: AppDecorations.cardBorder,
-            boxShadow: AppDecorations.cardShadow,
-          ),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -396,7 +428,7 @@ class ChatComposer extends StatelessWidget {
               ?top,
               if (picked != null)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 2, 8, 6),
+                  padding: const EdgeInsets.fromLTRB(4, 2, 4, 8),
                   child: Row(
                     children: [
                       ClipRRect(
@@ -408,7 +440,7 @@ class ChatComposer extends StatelessWidget {
                           fit: BoxFit.cover,
                         ),
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'พิมพ์คำบรรยายได้ในช่องด้านล่าง',
@@ -429,14 +461,21 @@ class ChatComposer extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  IconButton(
+                  IconButton.outlined(
                     tooltip: 'แนบรูป ไฟล์ หรือลิงก์',
                     onPressed: onAttach,
-                    icon: Icon(
-                      Icons.add_circle_outline_rounded,
-                      color: AppColors.primary,
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      side: BorderSide(
+                        color: AppColors.primary.withValues(alpha: 0.45),
+                      ),
                     ),
+                    icon: Icon(Icons.add_rounded, color: AppColors.primary),
                   ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
                       controller: controller,
@@ -453,7 +492,21 @@ class ChatComposer extends StatelessWidget {
                         counterText: '',
                         isDense: true,
                         filled: true,
-                        fillColor: AppColors.fill,
+                        fillColor: AppColors.surface,
+                        contentPadding: const EdgeInsets.fromLTRB(
+                          16,
+                          13,
+                          4,
+                          13,
+                        ),
+                        border: border,
+                        enabledBorder: border,
+                        focusedBorder: border.copyWith(
+                          borderSide: BorderSide(
+                            color: AppColors.primary,
+                            width: 1.5,
+                          ),
+                        ),
                         suffixIcon: onEmoji == null
                             ? null
                             : IconButton(
@@ -462,59 +515,28 @@ class ChatComposer extends StatelessWidget {
                                 icon: Icon(
                                   emojiOpen
                                       ? Icons.keyboard_alt_outlined
-                                      : Icons.emoji_emotions_outlined,
-                                  color: AppColors.muted,
+                                      : Icons.sentiment_satisfied_alt_outlined,
+                                  color: AppColors.navy,
                                 ),
                               ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide.none,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide.none,
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide.none,
-                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  if (!canSend && onMic != null)
-                    IconButton.filled(
-                      tooltip: 'อัดข้อความเสียง',
-                      onPressed: onMic,
-                      style: IconButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        minimumSize: const Size(44, 44),
-                      ),
-                      icon: const Icon(
-                        Icons.mic_rounded,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                    )
-                  else
-                    IconButton.filled(
-                      tooltip: 'ส่ง',
-                      onPressed: canSend ? onSend : null,
-                      style: IconButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        disabledBackgroundColor: AppColors.border,
-                        minimumSize: const Size(44, 44),
-                      ),
-                      icon: const Icon(
-                        Icons.send_rounded,
-                        color: Colors.white,
-                        size: 20,
-                      ),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    tooltip: showMic ? 'อัดข้อความเสียง' : 'ส่ง',
+                    onPressed: showMic ? onMic : (canSend ? onSend : null),
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      disabledBackgroundColor: AppColors.border,
+                      minimumSize: const Size(48, 48),
                     ),
+                    icon: Icon(
+                      showMic ? Icons.mic_rounded : Icons.send_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -565,7 +587,7 @@ class ChatReplyPreview extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 3),
           padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
           decoration: BoxDecoration(
-            color: AppColors.fill,
+            color: AppColors.softPrimary,
             borderRadius: BorderRadius.circular(12),
             border: Border(
               left: BorderSide(color: AppColors.primary, width: 3),
@@ -621,7 +643,7 @@ class ChatReplyBar extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(8, 2, 4, 6),
       padding: const EdgeInsets.fromLTRB(10, 4, 0, 4),
       decoration: BoxDecoration(
-        color: AppColors.fill,
+        color: AppColors.softPrimary,
         borderRadius: BorderRadius.circular(12),
         border: Border(left: BorderSide(color: AppColors.primary, width: 3)),
       ),
@@ -677,8 +699,8 @@ class ChatReactionsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     if (reactions.isEmpty) return const SizedBox.shrink();
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 3),
+    return Transform.translate(
+      offset: Offset(mine ? -8 : 8, -6),
       child: Wrap(
         spacing: 4,
         runSpacing: 4,
@@ -705,8 +727,9 @@ class ChatReactionsRow extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: reaction['mine'] == true
-                        ? AppColors.primary.withValues(alpha: 0.15)
-                        : AppColors.fill,
+                        ? AppColors.softPrimary
+                        : AppColors.surface,
+                    boxShadow: AppDecorations.cardShadow,
                     borderRadius: BorderRadius.circular(99),
                     border: Border.all(
                       color: reaction['mine'] == true

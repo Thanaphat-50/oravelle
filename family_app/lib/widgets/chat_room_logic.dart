@@ -1690,7 +1690,11 @@ mixin ChatRoomLogic<T extends StatefulWidget>
         : [
             if (time != null) ChatFormat.time(time),
             if (mine) status,
-          ].join(' · ');
+          ].join(' • ');
+
+    // ✓ ส่งแล้ว / ✓✓ อ่านแล้ว (ข้อความของเราที่ถึงเซิร์ฟเวอร์แล้ว)
+    final bool sent = mine && state == null;
+    final bool read = sent && status.startsWith('อ่านแล้ว');
 
     final String label = [
       mine ? 'ข้อความของคุณ' : 'ข้อความจาก ${senderNameOf(message)}',
@@ -1710,10 +1714,10 @@ mixin ChatRoomLogic<T extends StatefulWidget>
       body: body,
       semanticsLabel: label,
       senderName: isGroup && !mine ? senderNameOf(message) : null,
-      senderAvatar: isGroup && !mine ? avatarOf(message) : null,
+      senderAvatar: mine ? null : avatarOf(message),
       showSenderName: isGroup && !mine && startOfRun,
-      showAvatar: isGroup && !mine && endOfRun,
-      reserveAvatarSpace: isGroup && !mine,
+      showAvatar: !mine && startOfRun,
+      reserveAvatarSpace: !mine,
       image: buildMessageImage(message) ?? buildAttachment(message, mine),
       header: reply is Map
           ? ChatReplyPreview(
@@ -1734,6 +1738,10 @@ mixin ChatRoomLogic<T extends StatefulWidget>
             ),
       footer: endOfRun || state != null ? footer : null,
       footerColor: failed ? AppColors.danger : null,
+      footerIcon: sent && endOfRun
+          ? (read ? Icons.done_all_rounded : Icons.check_rounded)
+          : null,
+      footerIconColor: read ? AppColors.primary : null,
       endOfRun: endOfRun,
       dim: state != null,
       highlight: id != null && id == highlightId,

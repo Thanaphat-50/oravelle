@@ -391,24 +391,26 @@ Future<String?> showChatAttachMenu(BuildContext context) {
         onTap: () => Navigator.of(sheetContext).pop(value),
         borderRadius: BorderRadius.circular(16),
         child: SizedBox(
-          width: 78,
+          width: 76,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 CircleAvatar(
-                  radius: 26,
-                  backgroundColor: color.withValues(alpha: 0.14),
-                  child: Icon(icon, color: color, size: 26),
+                  radius: 30,
+                  backgroundColor: color.withValues(
+                    alpha: AppColors.isDark ? 0.24 : 0.13,
+                  ),
+                  child: Icon(icon, color: color, size: 28),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Text(
                   label,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppColors.navy,
-                    fontSize: 12.5,
+                    fontSize: 14,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -425,38 +427,54 @@ Future<String?> showChatAttachMenu(BuildContext context) {
     showDragHandle: true,
     builder: (sheetContext) => SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-        child: Wrap(
-          alignment: WrapAlignment.spaceEvenly,
-          runSpacing: 8,
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            option(
-              sheetContext,
-              'camera',
-              Icons.photo_camera_outlined,
-              'ถ่ายรูป',
-              const Color(0xFF7A5AF8),
+            Text(
+              'แนบในแชท',
+              style: TextStyle(
+                color: AppColors.navy,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
             ),
-            option(
-              sheetContext,
-              'gallery',
-              Icons.photo_library_outlined,
-              'เลือกรูป',
-              const Color(0xFF16A34A),
-            ),
-            option(
-              sheetContext,
-              'file',
-              Icons.insert_drive_file_outlined,
-              'ส่งไฟล์',
-              const Color(0xFF2563EB),
-            ),
-            option(
-              sheetContext,
-              'link',
-              Icons.link_rounded,
-              'แชร์ลิงก์',
-              const Color(0xFFEA580C),
+            const SizedBox(height: 12),
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              runSpacing: 8,
+              spacing: 8,
+              children: [
+                option(
+                  sheetContext,
+                  'camera',
+                  Icons.photo_camera_outlined,
+                  'กล้อง',
+                  const Color(0xFF7C3AED),
+                ),
+                option(
+                  sheetContext,
+                  'gallery',
+                  Icons.image_outlined,
+                  'รูปภาพ',
+                  const Color(0xFF2563EB),
+                ),
+                option(
+                  sheetContext,
+                  'file',
+                  Icons.insert_drive_file_outlined,
+                  'ไฟล์',
+                  const Color(0xFF16A34A),
+                ),
+                option(
+                  sheetContext,
+                  'link',
+                  Icons.link_rounded,
+                  'ลิงก์',
+                  const Color(0xFFDB2777),
+                ),
+              ],
             ),
           ],
         ),
@@ -761,18 +779,13 @@ class ChatVoiceTile extends StatelessWidget {
                         color: fore,
                       ),
               ),
-              SizedBox(
-                width: 110,
-                child: Semantics(
-                  label:
-                      'ความคืบหน้า ${chatDuration(position)} จาก ${chatDuration(total)}',
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    minHeight: 4,
-                    borderRadius: BorderRadius.circular(4),
-                    color: fore,
-                    backgroundColor: fore.withValues(alpha: 0.25),
-                  ),
+              Semantics(
+                label:
+                    'ความคืบหน้า ${chatDuration(position)} จาก ${chatDuration(total)}',
+                child: ChatWaveform(
+                  progress: progress,
+                  color: fore,
+                  seed: playKey.hashCode,
                 ),
               ),
               const SizedBox(width: 8),
@@ -791,6 +804,49 @@ class ChatVoiceTile extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// คลื่นเสียง (แท่งสูงต่ำคงที่ต่อข้อความ) / ส่วนที่เล่นแล้วสีเข้ม
+class ChatWaveform extends StatelessWidget {
+  final double progress;
+  final Color color;
+  final int seed;
+
+  const ChatWaveform({
+    super.key,
+    required this.progress,
+    required this.color,
+    required this.seed,
+  });
+
+  static const int bars = 22;
+
+  @override
+  Widget build(BuildContext context) {
+    final int played = (progress * bars).round();
+
+    return ExcludeSemantics(
+      child: SizedBox(
+        height: 26,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (int i = 0; i < bars; i++)
+              Container(
+                width: 3,
+                height:
+                    6 + (((seed + i * 7919) * 2654435761) & 0x7fffffff) % 17,
+                margin: const EdgeInsets.symmetric(horizontal: 1.25),
+                decoration: BoxDecoration(
+                  color: i < played ? color : color.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
