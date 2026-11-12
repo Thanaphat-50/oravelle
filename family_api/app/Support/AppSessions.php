@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\Call;
 use App\Models\DeviceToken;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
@@ -109,6 +110,9 @@ class AppSessions
 
             // หยุดส่ง Push ไปเครื่องของเซสชันนั้น (เครื่องอื่น/บัญชีอื่นไม่เกี่ยว)
             DeviceToken::whereIn('access_token_id', $ids)->delete();
+
+            // สายที่เริ่ม/รับด้วยเซสชันนั้นจบทันที (ลบห้อง LiveKit → หลุดจากสาย)
+            Call::endForSessions($ids);
 
             return PersonalAccessToken::whereIn('id', $ids)->delete();
         });

@@ -15,6 +15,7 @@ use App\Http\Controllers\HistoryController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\MapStatusController;
 use App\Http\Controllers\PostController;
+use App\Http\Controllers\CallController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\CommunityController;
@@ -357,6 +358,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/chats/{conversation}/messages/{message}', [ChatController::class, 'show'])
         ->whereNumber(['conversation', 'message'])
         ->middleware('throttle:chat');
+
+    // โทรเสียง/วิดีโอคอล 1 ต่อ 1 (สถานะสาย + token LiveKit อายุสั้น) — เริ่มสายได้ไม่เกิน 10 ครั้ง/นาที
+    Route::post('/calls', [CallController::class, 'start'])->middleware('throttle:10,1');
+    Route::middleware('throttle:120,1')->group(function () {
+        Route::get('/calls/active', [CallController::class, 'active']);
+        Route::get('/calls/{call}', [CallController::class, 'show'])->whereNumber('call');
+        Route::post('/calls/{call}/accept', [CallController::class, 'accept'])->whereNumber('call');
+        Route::post('/calls/{call}/decline', [CallController::class, 'decline'])->whereNumber('call');
+        Route::post('/calls/{call}/hangup', [CallController::class, 'hangup'])->whereNumber('call');
+        Route::post('/calls/{call}/heartbeat', [CallController::class, 'heartbeat'])->whereNumber('call');
+    });
 
     // บัญชี Google / LINE / Facebook ที่เชื่อมไว้ (หน้าตั้งค่า)
     Route::get('/social-accounts', [

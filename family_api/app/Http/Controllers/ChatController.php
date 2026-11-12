@@ -14,8 +14,10 @@ use App\Models\Shop;
 use App\Models\User;
 use App\Models\UserBlock;
 use App\Services\PushNotifications;
+use App\Support\ChatAccess;
 use App\Support\ChatAttachment;
 use App\Support\ChatExtras;
+use App\Support\LiveKit;
 use App\Support\MediaStorage;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
@@ -532,36 +534,20 @@ class ChatController extends Controller
     // คนในครอบครัวเดียวกับเรา (ไม่รวมตัวเอง)
     private function familyMemberIds(User $me)
     {
-        $familyId = FamilyMember::where('user_id', $me->id)->value('family_id');
-
-        if (!$familyId) {
-            return collect();
-        }
-
-        return FamilyMember::where('family_id', $familyId)
-            ->where('user_id', '!=', $me->id)
-            ->pluck('user_id')
-            ->map(fn ($id) => (int) $id);
+        return ChatAccess::familyMemberIds($me);
     }
 
     // คนที่เราบล็อก หรือบล็อกเรา
     private function blockedEitherWay(User $me)
     {
-        return UserBlock::where('user_id', $me->id)->pluck('blocked_user_id')
-            ->merge(UserBlock::where('blocked_user_id', $me->id)->pluck('user_id'))
-            ->map(fn ($id) => (int) $id)
-            ->unique();
+        return ChatAccess::blockedEitherWay($me);
     }
 
     // คนในกลุ่มเดียวกัน หรือห้องลูกค้า-ร้าน และไม่ได้บล็อกกัน
+    // สิทธิ์ร่วมกับการโทร (App\Support\ChatAccess)
     private function canSend(User $me, int $otherId, ?Conversation $conversation = null): bool
     {
-        if ($this->blockedEitherWay($me)->contains($otherId)) {
-            return false;
-        }
-
-        return $this->familyMemberIds($me)->contains($otherId)
-            || ($conversation?->isShopChatWith($me->id, $otherId) ?? false);
+        return ChatAccess::canSend($me, $otherId, $conversation);
     }
 
     // แชทจากหน้าคำสั่งซื้อ: ผู้ซื้อ → ร้าน / ร้าน → ลูกค้า (เช่น ถามบัญชีเพื่อคืนเงิน)
@@ -697,7 +683,9 @@ class ChatController extends Controller
                 $otherId
             ),
             'shop' => $this->shopPayload($conversation, $me),
-            'can_send' => $this->canSend($me, $otherId, $conversation),
+            'can_send' => $canSend = $this->canSend($me, $otherId, $conversation),
+            // ปุ่มโทร: LiveKit ตั้งค่าแล้ว + ยังคุยกันได้ (สิทธิ์เดียวกับส่งข้อความ)
+            'calls_enabled' => $canSend && LiveKit::configured(),
             // อีกฝ่ายอ่านถึงข้อความไหนแล้ว (แสดง "อ่านแล้ว")
             'other_read_id' => $conversation->lastReadId($otherId),
             // เราอ่านถึงไหน (เส้น "ข้อความที่ยังไม่ได้อ่าน" ตอนเปิดห้อง)

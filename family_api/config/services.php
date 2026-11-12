@@ -51,6 +51,15 @@ return [
         'graph_version' => env('FACEBOOK_GRAPH_VERSION'),
     ],
 
+    // โทรเสียง/วิดีโอ (LiveKit Cloud) ดู App\Support\LiveKit — ใส่ใน Laravel Cloud เท่านั้น
+    // ว่าง = ระบบโทรปิด (แอปไม่แสดงปุ่มโทร)
+    'livekit' => [
+        // wss://ชื่อโปรเจกต์.livekit.cloud (ใส่ https:// ก็ได้)
+        'url' => env('LIVEKIT_URL'),
+        'api_key' => env('LIVEKIT_API_KEY'),
+        'api_secret' => env('LIVEKIT_API_SECRET'),
+    ],
+
     // แจ้งเตือนเด้ง (Firebase Cloud Messaging) ดู App\Services\PushNotifications
     'fcm' => [
         // ไฟล์ JSON ของ Service account ทั้งไฟล์ แปลงเป็น base64 (Laravel Cloud)

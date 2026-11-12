@@ -9,6 +9,7 @@ use App\Models\Post;
 use App\Models\PostLike;
 use App\Models\User;
 use App\Models\UserBlock;
+use App\Models\Call;
 use App\Models\UserReport;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -85,6 +86,9 @@ class CommunityController extends Controller
             'user_id' => $me->id,
             'blocked_user_id' => $user->id,
         ]);
+
+        // บล็อกระหว่างโทร / ระหว่างเรียกเข้า → ตัดสายทันที
+        Call::endBetween((int) $me->id, (int) $user->id, 'blocked');
 
         return response()->json([
             'status' => true,
