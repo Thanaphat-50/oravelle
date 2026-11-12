@@ -1605,7 +1605,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         if (guest)
           buildCollapsible(visible: !immersive, child: buildJoinFamilyBanner()),
         buildCollapsible(
-          visible: !immersive,
+          visible: feedHeaderVisible,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(8, 2, 8, 0),
             child: SectionSwitch<CommunityFeedMode>(
@@ -1635,7 +1635,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ),
         // แถวกรองหมวด: อยู่กับที่ ไม่เลื่อนตามตอนปัดซ้าย-ขวา
         buildCollapsible(
-          visible: !immersive,
+          visible: feedHeaderVisible,
           child: Padding(
             padding: const EdgeInsets.only(top: 10, bottom: 2),
             child: CategoryFilterStrip(
@@ -1873,6 +1873,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   // หน้าวิดีโอเต็มจอ: แถบด้านบนเลื่อนหายขึ้นไป แถบล่างเลื่อนหายลงไป
   bool get immersive =>
       selectedIndex == tabHome && homeMode == CommunityFeedMode.videos;
+
+  // แท็บ สำหรับคุณ/ล่าสุด/วิดีโอ + แถวหมวด: เลื่อนลงดูโพสต์ → เลื่อนหายขึ้นไปพร้อมแถบล่าง
+  // เลื่อนขึ้น / สลับแท็บ → กลับมา
+  bool get feedHeaderVisible =>
+      !immersive && (bottomBarVisible || !hidesBarOnScroll);
 
   void showHomeMode(CommunityFeedMode mode) {
     setState(() {
