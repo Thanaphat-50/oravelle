@@ -112,6 +112,10 @@ class _ChatRoomPageState extends State<ChatRoomPage>
   @override
   bool get canCompose => conversation?['can_send'] != false;
 
+  // อ่านแล้ว = "เวลา ✓" (ส่งแล้วยังไม่อ่าน = "เวลา • ส่งแล้ว")
+  @override
+  bool get readAsCheck => true;
+
   @override
   bool get canReact => canCompose;
 

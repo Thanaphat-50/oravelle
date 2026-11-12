@@ -316,18 +316,11 @@ class _ChatListPageState extends State<ChatListPage> {
   }
 
   Widget buildHeader() {
-    final bool canPop = Navigator.of(context).canPop();
-
+    // ไม่มีปุ่มย้อนกลับบนหัว (ย้อนกลับด้วยปุ่ม/ท่าทางย้อนกลับของเครื่อง)
     return Padding(
-      padding: EdgeInsets.fromLTRB(canPop ? 4 : 20, 8, 16, 4),
+      padding: const EdgeInsets.fromLTRB(20, 8, 16, 4),
       child: Row(
         children: [
-          if (canPop)
-            IconButton(
-              tooltip: 'กลับ',
-              onPressed: () => Navigator.of(context).maybePop(),
-              icon: const Icon(Icons.arrow_back_rounded),
-            ),
           Expanded(
             child: Semantics(
               header: true,

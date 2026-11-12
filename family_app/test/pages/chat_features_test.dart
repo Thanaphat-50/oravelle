@@ -212,8 +212,11 @@ void main() {
       await openPrivate(tester);
 
       expect(find.text('ข้อความที่ยังไม่ได้อ่าน'), findsOneWidget);
-      expect(find.textContaining('อ่านแล้ว'), findsOneWidget);
+      // อ่านแล้ว = เวลา ✓ / ส่งแล้วยังไม่อ่าน = เวลา • ส่งแล้ว
+      expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+      expect(find.textContaining('อ่านแล้ว'), findsNothing);
       expect(find.textContaining('ส่งแล้ว'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('สวัสดี.*อ่านแล้ว')), findsOneWidget);
       expect(find.textContaining('ออนไลน์'), findsNothing);
 
       // โหลดข้อความไม่นับว่าอ่าน / แสดงล่างสุดแล้วจึงบอกว่าอ่านถึงข้อความล่าสุด

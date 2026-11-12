@@ -120,6 +120,9 @@ mixin ChatRoomLogic<T extends StatefulWidget>
 
   bool get canRefreshImages => false;
 
+  // อ่านแล้วแสดงเป็น ✓ หลังเวลา (แชทส่วนตัว) / false = เขียนคำว่าอ่านแล้ว (แชทกลุ่มบอกจำนวนคน)
+  bool get readAsCheck => false;
+
   String get loadFailedText => 'เปิดห้องแชทไม่สำเร็จ';
 
   Future<Map<String, dynamic>> fetchLatest();
@@ -1685,16 +1688,17 @@ mixin ChatRoomLogic<T extends StatefulWidget>
         ? 'ส่งไม่สำเร็จ · แตะเพื่อส่งอีกครั้ง'
         : (mine ? readStatusOf(message) : '');
 
+    // ข้อความของเราที่ถึงเซิร์ฟเวอร์แล้ว: ส่งแล้ว = "เวลา • ส่งแล้ว" / อ่านแล้ว = "เวลา ✓"
+    // (แชทกลุ่มบอกจำนวนคนอ่าน: "เวลา • อ่านแล้ว X คน ✓✓")
+    final bool sent = mine && state == null;
+    final bool read = sent && status.startsWith('อ่านแล้ว');
+
     final String footer = state != null
         ? status
         : [
             if (time != null) ChatFormat.time(time),
-            if (mine) status,
+            if (mine && !(read && readAsCheck)) status,
           ].join(' • ');
-
-    // ✓ ส่งแล้ว / ✓✓ อ่านแล้ว (ข้อความของเราที่ถึงเซิร์ฟเวอร์แล้ว)
-    final bool sent = mine && state == null;
-    final bool read = sent && status.startsWith('อ่านแล้ว');
 
     final String label = [
       mine ? 'ข้อความของคุณ' : 'ข้อความจาก ${senderNameOf(message)}',
@@ -1738,8 +1742,8 @@ mixin ChatRoomLogic<T extends StatefulWidget>
             ),
       footer: endOfRun || state != null ? footer : null,
       footerColor: failed ? AppColors.danger : null,
-      footerIcon: sent && endOfRun
-          ? (read ? Icons.done_all_rounded : Icons.check_rounded)
+      footerIcon: read && endOfRun
+          ? (readAsCheck ? Icons.check_rounded : Icons.done_all_rounded)
           : null,
       footerIconColor: read ? AppColors.primary : null,
       endOfRun: endOfRun,
