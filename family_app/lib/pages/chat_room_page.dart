@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../services/api_helper.dart';
+import '../services/call_coordinator.dart';
 import '../services/chat_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/chat_room_logic.dart';
@@ -372,6 +373,29 @@ class _ChatRoomPageState extends State<ChatRoomPage>
               ),
             ),
           ),
+          // โทร: แสดงเมื่อเซิร์ฟเวอร์เปิดระบบโทรแล้ว และยังคุยกันได้ (สิทธิ์เดียวกับส่งข้อความ)
+          actions: [
+            if (conversation?['calls_enabled'] == true) ...[
+              IconButton(
+                tooltip: 'โทรเสียง',
+                onPressed: () => CallCoordinator.instance.startCall(
+                  context,
+                  widget.conversationId,
+                  'audio',
+                ),
+                icon: const Icon(Icons.call_outlined),
+              ),
+              IconButton(
+                tooltip: 'วิดีโอคอล',
+                onPressed: () => CallCoordinator.instance.startCall(
+                  context,
+                  widget.conversationId,
+                  'video',
+                ),
+                icon: const Icon(Icons.videocam_outlined),
+              ),
+            ],
+          ],
         ),
         body: Column(
           children: [

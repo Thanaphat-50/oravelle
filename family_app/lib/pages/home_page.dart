@@ -11,6 +11,7 @@ import '../services/auth_service.dart';
 import '../services/background_location.dart';
 import '../data/market_data.dart' show marketColor;
 import '../services/cart_service.dart';
+import '../services/call_coordinator.dart';
 import '../services/chat_service.dart';
 import '../services/family_service.dart';
 import '../services/location_tracker.dart';
@@ -385,6 +386,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       showForegroundPush,
     );
 
+    // สายเรียกเข้า: ฟังแจ้งเตือน + ถามสายที่ยังเรียกอยู่ตอนเปิด/กลับเข้าแอป
+    CallCoordinator.instance.start();
+
     // เปิดแอปจากการกดแจ้งเตือน (ตอนแอปปิดอยู่)
     PushService.takeInitialMessage().then((data) {
       if (data != null && mounted) openFromPush(data);
@@ -393,6 +397,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   // แจ้งเตือนเข้าตอนเปิดแอปอยู่ → แถบข้อความ + ปุ่มดู
   void showForegroundPush(RemoteMessage message) {
+    // สายเรียกเข้า / สถานะสาย → หน้าสาย (ไม่แสดงเป็นแถบข้อความ)
+    if (message.data['type'] == 'call') {
+      CallCoordinator.instance.handlePush(message.data);
+      return;
+    }
+
     loadUnreadNotificationCount();
 
     // กำลังเปิดห้องแชทนั้นอยู่ → ข้อความขึ้นในห้องเองแล้ว
@@ -446,6 +456,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final NavigatorState navigator = Navigator.of(context);
 
     switch (type) {
+      // สายเรียกเข้า → ถามสถานะจริงก่อน (จบแล้ว/รับที่เครื่องอื่นแล้ว → ไม่แสดง)
+      case 'call':
+        final int? callId = int.tryParse('${data['call_id'] ?? ''}');
+
+        if (callId != null) {
+          await CallCoordinator.instance.openIncoming(callId);
+        }
+
+        return;
+
       // แชทกลุ่ม → ห้องนั้น (เซิร์ฟเวอร์ตรวจสิทธิ์ / หมดสิทธิ์ → ข้อความแจ้ง ไม่แสดงประวัติ)
       case 'group_message':
         final int? groupChatId = int.tryParse(
