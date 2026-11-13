@@ -2922,20 +2922,28 @@ class _FeedPageState extends State<FeedPage> {
     );
   }
 
+  // ป้ายความยาววิดีโอ "▶ 0:08"
   Widget buildDurationBadge(int seconds) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.fromLTRB(4, 2, 7, 2),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(
-        '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}',
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 15),
+          const SizedBox(width: 1),
+          Text(
+            '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
