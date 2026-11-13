@@ -2025,11 +2025,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ),
             ),
           ),
-          IconButton(
-            tooltip: 'บัญชีผู้ขาย',
-            onPressed: openSellerAccount,
-            icon: const Icon(Icons.storefront_outlined, size: 26),
-          ),
         ],
 
         // ค้นหาโพสต์และผู้ใช้ในชุมชน (หน้าหลัก)

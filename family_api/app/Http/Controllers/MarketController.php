@@ -493,10 +493,28 @@ class MarketController extends Controller
     }
 
     // ข้อมูลสินค้าแบบย่อสำหรับการ์ดในตาราง
+    // สินค้าที่ผู้ใช้คนนี้บันทึกไว้ (โหลดครั้งเดียวต่อคำขอ) → ♡ บนการ์ดสินค้า
+    private ?array $savedProductIds = null;
+
+    private function isSavedByViewer(Product $product): bool
+    {
+        if ($this->savedProductIds === null) {
+            $userId = request()->user()?->id;
+
+            $this->savedProductIds = $userId
+                ? SavedProduct::where('user_id', $userId)->pluck('product_id')
+                    ->map(fn ($id) => (int) $id)->flip()->all()
+                : [];
+        }
+
+        return isset($this->savedProductIds[(int) $product->id]);
+    }
+
     private function productCard(Product $product, bool $withShop = true): array
     {
         return [
             ...$product->only(['id', 'title', 'price', 'category', 'created_at']),
+            'is_saved' => $this->isSavedByViewer($product),
             'image_url' => $product->images->first()?->url,
             'images_count' => $product->images->count(),
             'is_featured' => $product->isFeatured(),

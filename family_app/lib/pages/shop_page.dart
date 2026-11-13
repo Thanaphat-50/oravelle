@@ -412,8 +412,6 @@ class _ShopPageState extends State<ShopPage> {
   Widget buildFeaturedTitle(String title) {
     return Row(
       children: [
-        const Icon(Icons.star_rounded, color: featuredColor, size: 22),
-        const SizedBox(width: 4),
         Text(
           title,
           style: TextStyle(
@@ -606,7 +604,9 @@ class _ShopPageState extends State<ShopPage> {
                         ),
                 ],
                 const SizedBox(height: 22),
-                buildSectionTitle(isFiltering ? 'ผลการค้นหา' : 'สินค้าใหม่'),
+                buildSectionTitle(
+                  isFiltering ? 'ผลการค้นหา' : 'สินค้าสำหรับคุณ',
+                ),
                 const SizedBox(height: 12),
               ],
             ),

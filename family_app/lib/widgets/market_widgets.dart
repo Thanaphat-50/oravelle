@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/market_data.dart';
+import '../services/market_service.dart';
 import '../theme/app_theme.dart';
 import 'autoplay_video_cover.dart';
 
@@ -124,10 +125,17 @@ class MarketProductCard extends StatelessWidget {
                         top: 8,
                         child: FeaturedProductBadge(),
                       ),
+                    // ♡ บันทึกสินค้า (มุมขวาบน) / ไอคอนวิดีโอย้ายไปมุมขวาล่าง
+                    if (product['id'] is num)
+                      Positioned(
+                        right: 6,
+                        top: 6,
+                        child: ProductSaveHeart(product: product),
+                      ),
                     if (product['has_video'] == true)
                       Positioned(
                         right: 8,
-                        top: 8,
+                        bottom: 8,
                         child: Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
@@ -466,6 +474,69 @@ class MarketSafetyNote extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ♡ บันทึกสินค้าบนการ์ด: เปลี่ยนทันที / ไม่สำเร็จ → คืนค่าเดิม + แจ้ง
+class ProductSaveHeart extends StatefulWidget {
+  final Map<String, dynamic> product;
+
+  const ProductSaveHeart({super.key, required this.product});
+
+  @override
+  State<ProductSaveHeart> createState() => _ProductSaveHeartState();
+}
+
+class _ProductSaveHeartState extends State<ProductSaveHeart> {
+  bool busy = false;
+
+  bool get saved => widget.product['is_saved'] == true;
+
+  Future<void> toggle() async {
+    final dynamic id = widget.product['id'];
+
+    if (busy || id is! num) return;
+
+    final bool next = !saved;
+
+    setState(() {
+      busy = true;
+      widget.product['is_saved'] = next;
+    });
+
+    try {
+      final result = await MarketService.setProductSaved(id.toInt(), next);
+
+      if (result['status'] != true) throw StateError('not saved');
+    } catch (_) {
+      if (mounted) {
+        setState(() => widget.product['is_saved'] = !next);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('บันทึกสินค้าไม่สำเร็จ ลองใหม่อีกครั้ง'),
+          ),
+        );
+      }
+    } finally {
+      busy = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.92),
+      shape: const CircleBorder(),
+      child: IconButton(
+        tooltip: saved ? 'เอาออกจากที่บันทึก' : 'บันทึกสินค้า',
+        onPressed: toggle,
+        icon: Icon(
+          saved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          color: saved ? const Color(0xFFE11D48) : const Color(0xFF374151),
+          size: 21,
+        ),
       ),
     );
   }
