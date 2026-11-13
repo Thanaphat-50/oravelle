@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../data/market_data.dart';
 import '../theme/app_theme.dart';
+import 'market_widgets.dart';
 
 // สีป้าย "แนะนำ"
 const Color featuredColor = Color(0xFFF59E0B);
@@ -176,7 +177,9 @@ class _FeaturedShopsBannerState extends State<FeaturedShopsBanner> {
                   width: i == currentPage ? 18 : 7,
                   height: 7,
                   decoration: BoxDecoration(
-                    color: i == currentPage ? featuredColor : AppColors.border,
+                    color: i == currentPage
+                        ? AppColors.primary
+                        : AppColors.border,
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
@@ -267,7 +270,7 @@ class _FeaturedShopCard extends StatelessWidget {
     final String subtitle = [
       if (category != null) category.label,
       shopArea(shop),
-    ].where((part) => part.isNotEmpty).join(' · ');
+    ].where((part) => part.isNotEmpty).join(' • ');
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -280,24 +283,37 @@ class _FeaturedShopCard extends StatelessWidget {
           child: Ink(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: featuredColor.withValues(alpha: 0.45)),
+              border: Border.all(color: AppColors.border),
             ),
             child: Column(
               children: [
-                Expanded(child: buildImages()),
+                // รูปสินค้าของร้าน + ป้าย ★ แนะนำ มุมซ้ายบน
+                Expanded(
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      buildImages(),
+                      const Positioned(
+                        left: 10,
+                        top: 10,
+                        child: FeaturedProductBadge(),
+                      ),
+                    ],
+                  ),
+                ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                  padding: const EdgeInsets.fromLTRB(12, 10, 10, 12),
                   child: Row(
                     children: [
                       CircleAvatar(
                         radius: 20,
-                        backgroundColor: marketColor.withValues(alpha: 0.10),
+                        backgroundColor: AppColors.softPrimary,
                         foregroundImage: logoUrl != null
                             ? NetworkImage(logoUrl)
                             : null,
-                        child: const Icon(
+                        child: Icon(
                           Icons.storefront_rounded,
-                          color: marketColor,
+                          color: AppColors.primary,
                           size: 20,
                         ),
                       ),
@@ -330,7 +346,21 @@ class _FeaturedShopCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      const FeaturedBadge(),
+                      OutlinedButton(
+                        onPressed: onTap,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          minimumSize: const Size(0, 38),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          side: BorderSide(
+                            color: AppColors.primary.withValues(alpha: 0.45),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('ดูร้าน'),
+                      ),
                     ],
                   ),
                 ),

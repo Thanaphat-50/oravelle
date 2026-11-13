@@ -281,7 +281,7 @@ class _ShopPageState extends State<ShopPage> {
       textInputAction: TextInputAction.search,
       onSubmitted: submitSearch,
       decoration: InputDecoration(
-        hintText: 'ค้นหาสินค้าหรือร้าน',
+        hintText: 'ค้นหาสินค้าหรือร้านค้า',
         prefixIcon: const Icon(Icons.search_rounded),
         suffixIcon: ValueListenableBuilder<TextEditingValue>(
           valueListenable: searchController,
@@ -562,7 +562,7 @@ class _ShopPageState extends State<ShopPage> {
         featuredProducts.isNotEmpty && query.isEmpty;
 
     return RefreshIndicator(
-      color: marketColor,
+      color: AppColors.primary,
       onRefresh: refresh,
       child: CustomScrollView(
         controller: scrollController,

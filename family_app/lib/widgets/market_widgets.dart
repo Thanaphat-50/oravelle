@@ -69,130 +69,136 @@ class MarketProductCard extends StatelessWidget {
           ].where((part) => part.isNotEmpty).join(' · ')
         : '';
 
-    return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(20),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: AppDecorations.cardBorder,
-            boxShadow: AppDecorations.cardShadow,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // รูปใช้ความสูงที่เหลือจากข้อความ (ไม่ล้นเมื่อขยายตัวอักษร)
-              Expanded(
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    SizedBox(
-                      width: double.infinity,
-                      child: cardVideoUrl == null
-                          ? buildImage(imageUrl)
-                          : AutoplayVideoCover(
-                              videoUrl: cardVideoUrl,
-                              placeholder: buildImage(
-                                product['card_video_thumbnail_url']
-                                        ?.toString() ??
-                                    imageUrl,
+    return DecoratedBox(
+      // เงาอยู่นอกการ์ด (วาดใต้ InkWell จะทับพื้นขาวจนการ์ดเป็นสีเทา)
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: AppDecorations.cardShadow,
+      ),
+      child: Material(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: AppDecorations.cardBorder,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // รูปใช้ความสูงที่เหลือจากข้อความ (ไม่ล้นเมื่อขยายตัวอักษร)
+                Expanded(
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: cardVideoUrl == null
+                            ? buildImage(imageUrl)
+                            : AutoplayVideoCover(
+                                videoUrl: cardVideoUrl,
+                                placeholder: buildImage(
+                                  product['card_video_thumbnail_url']
+                                          ?.toString() ??
+                                      imageUrl,
+                                ),
                               ),
-                            ),
-                    ),
-                    if (soldOut)
-                      Positioned.fill(
-                        child: ColoredBox(
-                          color: Colors.black.withValues(alpha: 0.45),
-                          child: const Center(
-                            child: Text(
-                              'สินค้าหมด',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
+                      ),
+                      if (soldOut)
+                        Positioned.fill(
+                          child: ColoredBox(
+                            color: Colors.black.withValues(alpha: 0.45),
+                            child: const Center(
+                              child: Text(
+                                'สินค้าหมด',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    // ช่องแนะนำแบบชำระเงิน
-                    if (product['is_featured'] == true)
-                      const Positioned(
-                        left: 8,
-                        top: 8,
-                        child: FeaturedProductBadge(),
-                      ),
-                    // ♡ บันทึกสินค้า (มุมขวาบน) / ไอคอนวิดีโอย้ายไปมุมขวาล่าง
-                    if (product['id'] is num)
-                      Positioned(
-                        right: 6,
-                        top: 6,
-                        child: ProductSaveHeart(product: product),
-                      ),
-                    if (product['has_video'] == true)
-                      Positioned(
-                        right: 8,
-                        bottom: 8,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.55),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.play_arrow_rounded,
-                            size: 16,
-                            color: Colors.white,
+                      // ช่องแนะนำแบบชำระเงิน
+                      if (product['is_featured'] == true)
+                        const Positioned(
+                          left: 8,
+                          top: 8,
+                          child: FeaturedProductBadge(),
+                        ),
+                      // ♡ บันทึกสินค้า (มุมขวาบน) / ไอคอนวิดีโอย้ายไปมุมขวาล่าง
+                      if (product['id'] is num)
+                        Positioned(
+                          right: 2,
+                          top: 2,
+                          child: ProductSaveHeart(product: product),
+                        ),
+                      if (product['has_video'] == true)
+                        Positioned(
+                          right: 8,
+                          bottom: 8,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.55),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.play_arrow_rounded,
+                              size: 16,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(11, 9, 11, 11),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      product['title']?.toString() ?? '',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.navy,
-                        fontSize: 13.5,
-                        height: 1.3,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      formatPrice(product['price']),
-                      style: const TextStyle(
-                        color: marketColor,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    if (showShop && shopLine.isNotEmpty) ...[
-                      const SizedBox(height: 4),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(11, 9, 11, 11),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        shopLine,
-                        maxLines: 1,
+                        product['title']?.toString() ?? '',
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: AppColors.muted,
-                          fontSize: 11.5,
+                          color: AppColors.navy,
+                          fontSize: 13.5,
+                          height: 1.3,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
+                      const SizedBox(height: 5),
+                      Text(
+                        formatPrice(product['price']),
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      if (showShop && shopLine.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          shopLine,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -526,17 +532,21 @@ class _ProductSaveHeartState extends State<ProductSaveHeart> {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withValues(alpha: 0.92),
-      shape: const CircleBorder(),
-      child: IconButton(
-        tooltip: saved ? 'เอาออกจากที่บันทึก' : 'บันทึกสินค้า',
-        onPressed: toggle,
-        icon: Icon(
-          saved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-          color: saved ? const Color(0xFFE11D48) : const Color(0xFF374151),
-          size: 21,
-        ),
+    // วงกลมขาวเล็ก 34 แต่พื้นที่แตะยังเป็น 48 ตามมาตรฐาน
+    return IconButton(
+      tooltip: saved ? 'เอาออกจากที่บันทึก' : 'บันทึกสินค้า',
+      onPressed: toggle,
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.white.withValues(alpha: 0.92),
+        fixedSize: const Size(34, 34),
+        minimumSize: const Size(34, 34),
+        padding: EdgeInsets.zero,
+        tapTargetSize: MaterialTapTargetSize.padded,
+      ),
+      icon: Icon(
+        saved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+        color: saved ? const Color(0xFFE11D48) : const Color(0xFF374151),
+        size: 19,
       ),
     );
   }
