@@ -65,9 +65,8 @@ PostCategory? findPostCategory(dynamic key) {
   return null;
 }
 
-// สีฝั่งชุมชน (โหมดมืดใช้โทนสว่างกว่าให้อ่านง่าย)
-Color get communityAccentColor =>
-    AppColors.isDark ? const Color(0xFF2A9CC4) : const Color(0xFF0B7FA6);
+// สีฝั่งชุมชน = สีหลักของแอป (Lavender)
+Color get communityAccentColor => AppColors.primary;
 
 // =======================================================
 // แถวกรองฟีดชุมชนตามหมวด ("ทั้งหมด" + หมวดต่าง ๆ) เลื่อนซ้าย-ขวาได้
@@ -155,26 +154,24 @@ class CategoryChoiceChip extends StatelessWidget {
           onTap: onTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            constraints: const BoxConstraints(minHeight: 40),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 18),
             decoration: BoxDecoration(
-              color: selected ? color : AppColors.surface,
+              color: selected ? AppColors.primary : AppColors.surface,
               borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: selected ? color : AppColors.border),
+              border: Border.all(
+                color: selected ? AppColors.primary : AppColors.border,
+              ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 15, color: selected ? Colors.white : color),
-                const SizedBox(width: 5),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
+            // ตัวหนังสืออย่างเดียว (Lavender) — สีหมวดยังใช้ที่ป้ายบนการ์ดโพสต์
+            child: Text(
+              label,
+              style: TextStyle(
+                color: foreground,
+                fontSize: 14,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+              ),
             ),
           ),
         ),

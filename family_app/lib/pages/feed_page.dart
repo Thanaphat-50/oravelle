@@ -1755,6 +1755,49 @@ class _FeedPageState extends State<FeedPage> {
     return myId != null && post['user_id']?.toString() == myId.toString();
   }
 
+  // วันที่บนหัวการ์ดโพสต์: ไม่ถึงชั่วโมง = X นาทีที่แล้ว / วันนี้ / เมื่อวาน / 1 พ.ย. (ปีอื่นมีปี)
+  String postDate(dynamic value) {
+    final DateTime? date = DateTime.tryParse(value?.toString() ?? '')
+        ?.toLocal();
+
+    if (date == null) return '';
+
+    final DateTime now = DateTime.now();
+    final Duration age = now.difference(date);
+
+    if (age.inMinutes < 1) return 'เมื่อสักครู่';
+    if (age.inMinutes < 60) return '${age.inMinutes} นาทีที่แล้ว';
+
+    final int days = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).difference(DateTime(date.year, date.month, date.day)).inDays;
+
+    if (days == 0) return 'วันนี้';
+    if (days == 1) return 'เมื่อวาน';
+
+    const months = [
+      '',
+      'ม.ค.',
+      'ก.พ.',
+      'มี.ค.',
+      'เม.ย.',
+      'พ.ค.',
+      'มิ.ย.',
+      'ก.ค.',
+      'ส.ค.',
+      'ก.ย.',
+      'ต.ค.',
+      'พ.ย.',
+      'ธ.ค.',
+    ];
+
+    return date.year == now.year
+        ? '${date.day} ${months[date.month]}'
+        : '${date.day} ${months[date.month]} ${date.year + 543}';
+  }
+
   String formatDate(dynamic value) {
     if (value == null) {
       return '';
@@ -3393,29 +3436,25 @@ class _FeedPageState extends State<FeedPage> {
   }
 
   Widget buildShareButton(Map<String, dynamic> post, int postId) {
-    final int count = post['shares_count'] is num
-        ? (post['shares_count'] as num).toInt()
-        : 0;
-
     final bool busy = sharingPostIds.contains(postId);
 
     return Material(
-      color: AppColors.fill,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: busy ? null : () => openShareSheet(post),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.share_outlined, color: AppColors.muted, size: 18),
+              Icon(Icons.share_outlined, color: AppColors.navy, size: 21),
               const SizedBox(width: 7),
               Text(
-                count > 0 ? '$count' : 'แชร์',
+                'แชร์',
                 style: TextStyle(
-                  color: AppColors.muted,
+                  color: AppColors.navy,
                   fontSize: 13.5,
                   fontWeight: FontWeight.w700,
                 ),
@@ -3535,30 +3574,13 @@ class _FeedPageState extends State<FeedPage> {
                             const SizedBox(height: 3),
                             Row(
                               children: [
-                                // โพสต์ชุมชน: ป้ายหมวด / โพสต์ครอบครัว: ไอคอนบ้าน
-                                if (category != null) ...[
-                                  CategoryBadge(category: category),
-                                  const SizedBox(width: 6),
-                                ] else ...[
-                                  Icon(
-                                    community
-                                        ? Icons.public_rounded
-                                        : Icons.groups_rounded,
-                                    size: 13,
-                                    color: AppColors.muted,
-                                  ),
-                                  const SizedBox(width: 4),
-                                ],
+                                // "หมวด • วันที่" (โพสต์ครอบครัว: "กลุ่ม • วันที่")
                                 Flexible(
                                   child: Text(
-                                    (category != null
-                                            ? formatDate(post['created_at'])
-                                            : '${community ? 'ชุมชน' : 'กลุ่ม'} · '
-                                                  '${formatDate(post['created_at'])}') +
-                                        // ข้อความเคยเปลี่ยนจริง
-                                        (post['edited_at'] != null
-                                            ? ' · แก้ไขแล้ว'
-                                            : ''),
+                                    // ข้อความเคยเปลี่ยนจริง → "· แก้ไขแล้ว"
+                                    '${category?.label ?? (community ? 'ชุมชน' : 'กลุ่ม')} • '
+                                    '${postDate(post['created_at'])}'
+                                    '${post['edited_at'] != null ? ' · แก้ไขแล้ว' : ''}',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
@@ -3666,10 +3688,11 @@ class _FeedPageState extends State<FeedPage> {
                 // ===========================================
                 // Wrap: ตัวอักษรใหญ่/จอเล็ก → ปุ่มขึ้นบรรทัดใหม่แทนล้นจอ
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 12, 12),
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
                   child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
                     spacing: 10,
-                    runSpacing: 8,
+                    runSpacing: 4,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       if (postId != null) buildLikeButton(post, postId),
@@ -3812,14 +3835,14 @@ class _FeedPageState extends State<FeedPage> {
 
     final int count = likesCountOf(post);
 
-    final Color color = liked ? likeColor : AppColors.muted;
+    final Color color = liked ? likeColor : AppColors.navy;
 
     return Semantics(
       button: true,
       toggled: liked,
       label: liked ? 'ยกเลิกถูกใจ' : 'ถูกใจ',
       child: Material(
-        color: liked ? likeColor.withValues(alpha: 0.10) : AppColors.fill,
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(999),
         child: InkWell(
           borderRadius: BorderRadius.circular(999),
@@ -3827,7 +3850,7 @@ class _FeedPageState extends State<FeedPage> {
             toggleLike(post, postId);
           },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -3843,7 +3866,7 @@ class _FeedPageState extends State<FeedPage> {
                         : Icons.favorite_border_rounded,
                     key: ValueKey(liked),
                     color: color,
-                    size: 18,
+                    size: 21,
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -3851,8 +3874,8 @@ class _FeedPageState extends State<FeedPage> {
                   count > 0 ? '$count' : 'ถูกใจ',
                   style: TextStyle(
                     color: color,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -4009,20 +4032,20 @@ class _FeedPageState extends State<FeedPage> {
 
   Widget buildCommentButton(int postId, int count) {
     return Material(
-      color: AppColors.fill,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: () => openComments(postId),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 Icons.chat_bubble_outline_rounded,
-                color: AppColors.muted,
-                size: 18,
+                color: AppColors.navy,
+                size: 21,
               ),
               const SizedBox(width: 7),
               // ตัวอักษรใหญ่มาก → ตัดท้ายแทนล้นปุ่ม
@@ -4032,7 +4055,7 @@ class _FeedPageState extends State<FeedPage> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: AppColors.muted,
+                    color: AppColors.navy,
                     fontSize: 13.5,
                     fontWeight: FontWeight.w700,
                   ),

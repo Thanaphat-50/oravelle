@@ -130,10 +130,6 @@ class SectionSwitch<T> extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (!compact) ...[
-                  Icon(option.icon, size: 19, color: color),
-                  const SizedBox(width: 6),
-                ],
                 Flexible(
                   child: Text(
                     option.label,
