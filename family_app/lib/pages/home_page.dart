@@ -2349,9 +2349,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               });
             },
             children: [
-              const FeedPage(
-                key: ValueKey('feed-family'),
+              FeedPage(
+                key: const ValueKey('feed-family'),
                 scope: FeedScope.family,
+                header: buildFamilyFeedHeader(),
               ),
               buildFamily(),
             ],
@@ -2700,6 +2701,73 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ),
         ),
       ],
+    );
+  }
+
+  // หน้าโพสต์ในกลุ่ม: การ์ดกลุ่ม (ชื่อ จำนวนสมาชิก ปุ่มห้องแชท)
+  Widget buildFamilyFeedHeader() {
+    final dynamic family = familyData?['family'];
+
+    if (family is! Map) return const SizedBox.shrink();
+
+    final List members = family['members'] as List? ?? [];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: AppDecorations.card(radius: 20),
+      child: Row(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: AppColors.softPrimary,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(Icons.groups_rounded, color: AppColors.primary, size: 30),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  family['name']?.toString() ?? 'กลุ่ม',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'สมาชิก ${members.length} คน',
+                  style: TextStyle(color: AppColors.muted, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const GroupChatPage()),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              minimumSize: const Size(0, 44),
+              side: BorderSide(color: AppColors.primary.withValues(alpha: 0.45)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+            label: const Text('ห้องแชท'),
+          ),
+        ],
+      ),
     );
   }
 

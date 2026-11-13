@@ -19,7 +19,6 @@ import '../widgets/hashtag_text.dart';
 import '../widgets/photo_viewer.dart';
 import '../widgets/post_categories.dart';
 import '../widgets/share_sheet.dart';
-import 'group_chat_page.dart';
 import 'post_detail_page.dart';
 import 'post_edit_page.dart';
 import 'search_page.dart';
@@ -3155,51 +3154,96 @@ class _FeedPageState extends State<FeedPage> {
       );
     }
 
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'ล่าสุดในกลุ่ม',
-          style: TextStyle(
-            color: AppColors.navy,
-            fontSize: 19,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const Spacer(),
-        // แชทกลุ่ม (ห้องเดียวของกลุ่ม)
-        IconButton(
-          tooltip: 'แชทกลุ่ม',
-          onPressed: () => Navigator.of(context)
-              .push(MaterialPageRoute(builder: (_) => const GroupChatPage())),
-          icon: Icon(Icons.forum_outlined, color: AppColors.primary),
-        ),
-        // ค้นหาเฉพาะโพสต์ในกลุ่ม (แยกจากค้นหาชุมชน)
-        IconButton(
-          tooltip: 'ค้นหาในกลุ่ม',
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const SearchPage(area: SearchArea.family),
+        if (widget.onJoinFamily == null) ...[
+          buildComposerPrompt(),
+          const SizedBox(height: 18),
+        ],
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'ล่าสุดในกลุ่ม',
+                style: TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
-          ),
-          icon: Icon(Icons.search_rounded, color: AppColors.primary),
+            // ค้นหาเฉพาะโพสต์ในกลุ่ม (แยกจากค้นหาชุมชน)
+            IconButton(
+              tooltip: 'ค้นหาในกลุ่ม',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const SearchPage(area: SearchArea.family),
+                ),
+              ),
+              icon: Icon(Icons.search_rounded, color: AppColors.navy),
+            ),
+          ],
         ),
-        if (!feed.isLoading && feed.posts.isNotEmpty)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      ],
+    );
+  }
+
+  // ช่องชวนโพสต์ในกลุ่ม (แตะ = เปิดหน้าต่างเขียนโพสต์ เหมือนปุ่ม +)
+  Widget buildComposerPrompt() {
+    return Semantics(
+      button: true,
+      label: 'แบ่งปันเรื่องราวกับกลุ่ม',
+      excludeSemantics: true,
+      child: Material(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: openComposer,
+          child: Ink(
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.09),
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.circular(20),
+              border: AppDecorations.cardBorder,
+              boxShadow: AppDecorations.cardShadow,
             ),
-            child: Text(
-              '${feed.posts.length} โพสต์',
-              style: TextStyle(
-                color: AppColors.primary,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: AppColors.softPrimary,
+                    child: Icon(Icons.edit_outlined, color: AppColors.primary),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Container(
+                      constraints: const BoxConstraints(minHeight: 44),
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Text(
+                        'แบ่งปันเรื่องราวกับกลุ่ม...',
+                        style: TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 14.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(Icons.image_outlined, color: AppColors.navy),
+                  const SizedBox(width: 4),
+                ],
               ),
             ),
           ),
-      ],
+        ),
+      ),
     );
   }
 
