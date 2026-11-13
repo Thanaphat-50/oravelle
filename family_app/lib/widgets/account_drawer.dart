@@ -114,13 +114,7 @@ class _AccountDrawerState extends State<AccountDrawer> {
         4,
         12,
       ),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF172554), Color(0xFF4650D8), Color(0xFF666CFF)],
-        ),
-      ),
+      color: AppColors.softPrimary,
       child: Row(
         children: [
           Expanded(
@@ -143,8 +137,8 @@ class _AccountDrawerState extends State<AccountDrawer> {
                               name,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: AppColors.navy,
                                 fontSize: 17,
                                 height: 1.25,
                                 fontWeight: FontWeight.w800,
@@ -157,7 +151,7 @@ class _AccountDrawerState extends State<AccountDrawer> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.88),
+                                  color: AppColors.muted,
                                   fontSize: 13,
                                 ),
                               ),
@@ -174,7 +168,7 @@ class _AccountDrawerState extends State<AccountDrawer> {
           IconButton(
             tooltip: 'ปิดเมนู',
             onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close_rounded, color: Colors.white),
+            icon: Icon(Icons.close_rounded, color: AppColors.navy),
           ),
         ],
       ),
@@ -190,21 +184,14 @@ class _AccountDrawerState extends State<AccountDrawer> {
     int badge = 0,
     bool danger = false,
   }) {
-    color ??= AppColors.primary;
+    final Color iconColor = danger ? AppColors.danger : AppColors.primary;
 
     return ListTile(
       onTap: () => select(item),
       minTileHeight: 52,
       contentPadding: const EdgeInsets.symmetric(horizontal: 18),
-      leading: Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(icon, color: color, size: 21),
-      ),
+      leading: Icon(icon, color: iconColor, size: 24),
+      minLeadingWidth: 28,
       title: Text(
         title,
         style: TextStyle(
@@ -219,8 +206,11 @@ class _AccountDrawerState extends State<AccountDrawer> {
               subtitle,
               style: TextStyle(color: AppColors.subtle, fontSize: 12.5),
             ),
-      trailing: badge > 0
-          ? Semantics(
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (badge > 0)
+            Semantics(
               label: 'ยังไม่ได้อ่าน $badge รายการ',
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -237,8 +227,11 @@ class _AccountDrawerState extends State<AccountDrawer> {
                   ),
                 ),
               ),
-            )
-          : null,
+            ),
+          const SizedBox(width: 2),
+          Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+        ],
+      ),
     );
   }
 
@@ -305,7 +298,6 @@ class _AccountDrawerState extends State<AccountDrawer> {
                       item: AccountMenuItem.history,
                       icon: Icons.history_rounded,
                       title: 'ประวัติการใช้งาน',
-                      subtitle: 'ถูกใจ ความคิดเห็น แชร์ และการติดตาม',
                     ),
                     buildItem(
                       item: AccountMenuItem.savedPosts,
@@ -369,14 +361,12 @@ class _AccountDrawerState extends State<AccountDrawer> {
                       item: AccountMenuItem.settings,
                       icon: Icons.settings_outlined,
                       title: 'ตั้งค่า',
-                      subtitle: 'แจ้งเตือน ตำแหน่ง ความเป็นส่วนตัว บัญชี',
                       color: AppColors.subtle,
                     ),
                     buildItem(
                       item: AccountMenuItem.help,
                       icon: Icons.support_agent_rounded,
                       title: 'ช่วยเหลือและแจ้งปัญหา',
-                      subtitle: 'ส่งเรื่องให้ทีมงานและติดตามคำตอบ',
                       color: AppColors.sky,
                     ),
                     buildItem(
