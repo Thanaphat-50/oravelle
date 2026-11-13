@@ -1339,117 +1339,58 @@ class _ActivityPageState extends State<ActivityPage> {
   // ตัวเลขจากเซิร์ฟเวอร์ (นับทุกกิจกรรม ไม่ใช่เฉพาะหน้าที่โหลด)
   Widget buildPlannerHeader() {
     final total = counts['all'] ?? activities.length;
-
     final completed = counts['completed'] ?? 0;
+    final overdue = counts['overdue'] ?? 0;
 
-    final familyCount = counts['family'] ?? 0;
-    final progress = total == 0 ? 0.0 : completed / total;
+    Widget divider() =>
+        Container(width: 1, height: 34, color: AppColors.border);
 
     return Container(
-      padding: const EdgeInsets.all(22),
-
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF172554), Color(0xFF4650D8), Color(0xFF656BFF)],
-        ),
-
-        borderRadius: BorderRadius.circular(28),
-
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.20),
-            blurRadius: 30,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      decoration: AppDecorations.card(radius: 22),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.13),
-
-                  borderRadius: BorderRadius.circular(99),
+                  color: AppColors.softPrimary,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-
-                child: const Text(
-                  'FAMILY PLANNER',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.3,
-                  ),
+                child: Icon(
+                  Icons.calendar_month_rounded,
+                  color: AppColors.primary,
+                  size: 26,
                 ),
               ),
-
-              const Spacer(),
-
-              Text(
-                '${(progress * 100).round()}%',
-
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 23,
-                  fontWeight: FontWeight.w800,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'แผนของครอบครัว',
+                  style: TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ],
           ),
-
-          const SizedBox(height: 20),
-
-          const Text(
-            'ทุกแผนสำคัญ\nเมื่อทำไปด้วยกัน',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 25,
-              height: 1.18,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-
-          const SizedBox(height: 18),
-
-          ClipRRect(
-            borderRadius: BorderRadius.circular(99),
-
-            child: LinearProgressIndicator(
-              value: progress,
-
-              minHeight: 8,
-
-              backgroundColor: Colors.white.withValues(alpha: 0.14),
-
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.warm),
-            ),
-          ),
-
-          const SizedBox(height: 17),
-
+          const SizedBox(height: 16),
           Row(
             children: [
               _PlannerStat(value: '$total', label: 'ทั้งหมด'),
-
-              const SizedBox(width: 8),
-
+              divider(),
               _PlannerStat(value: '$completed', label: 'สำเร็จ'),
-
-              const SizedBox(width: 8),
-
-              _PlannerStat(value: '$familyCount', label: 'แชร์แล้ว'),
+              divider(),
+              _PlannerStat(
+                value: '$overdue',
+                label: 'เลยกำหนด',
+                alert: overdue > 0,
+              ),
             ],
           ),
         ],
@@ -1463,27 +1404,26 @@ class _ActivityPageState extends State<ActivityPage> {
 
   // ตัวกรอง (เซิร์ฟเวอร์กรองจากกิจกรรมทั้งหมด) + จำนวนของแต่ละตัวกรอง
   Widget buildFilters() {
-    const List<(String, String, IconData?)> filters = [
-      ('all', 'ทั้งหมด', null),
-      ('today', 'วันนี้', Icons.today_rounded),
-      ('overdue', 'เกินกำหนด', Icons.alarm_rounded),
-      ('completed', 'เสร็จแล้ว', Icons.task_alt_rounded),
-      ('mine', 'ของฉัน', Icons.person_rounded),
-      ('family', 'กลุ่ม', Icons.groups_rounded),
+    const List<(String, String)> filters = [
+      ('all', 'ทั้งหมด'),
+      ('today', 'วันนี้'),
+      ('overdue', 'เลยกำหนด'),
+      ('completed', 'เสร็จแล้ว'),
+      ('mine', 'ของฉัน'),
+      ('family', 'กลุ่ม'),
     ];
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          for (final (key, label, icon) in filters) ...[
+          for (final (key, label) in filters) ...[
             _FilterChip(
               text: switch (counts[key]) {
                 final int count when key != 'all' && count > 0 =>
                   '$label $count',
                 _ => label,
               },
-              icon: icon,
               selected: selectedFilter == key,
               onTap: () => changeFilter(key),
             ),
@@ -1932,7 +1872,7 @@ class _ActivityPageState extends State<ActivityPage> {
       'mine': 'ยังไม่มีกิจกรรมที่คุณสร้าง',
       'family': 'ยังไม่มีกิจกรรมที่แชร์ในกลุ่ม',
       'today': 'วันนี้ไม่มีกิจกรรม',
-      'overdue': 'ไม่มีกิจกรรมที่เกินกำหนด เยี่ยมมาก!',
+      'overdue': 'ไม่มีกิจกรรมที่เลยกำหนด เยี่ยมมาก!',
       'completed': 'ยังไม่มีกิจกรรมที่ทำเสร็จ',
     };
 
@@ -1953,36 +1893,49 @@ class _ActivityPageState extends State<ActivityPage> {
   }
 
   Widget buildEmptyState() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 45),
-
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-
-        borderRadius: BorderRadius.circular(25),
-
-        border: AppDecorations.cardBorder,
-        boxShadow: AppDecorations.cardShadow,
-      ),
-
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 34, 20, 20),
       child: Column(
         children: [
-          Container(
-            width: 82,
-            height: 82,
-
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.08),
-
-              shape: BoxShape.circle,
-            ),
-
-            child: Icon(
-              Icons.calendar_month_outlined,
-
-              color: AppColors.primary,
-
-              size: 37,
+          // ภาพปฏิทิน (วงกลมลาเวนเดอร์ + ปฏิทิน + ป้าย +)
+          SizedBox(
+            width: 124,
+            height: 116,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  width: 112,
+                  height: 112,
+                  decoration: BoxDecoration(
+                    color: AppColors.softPrimary,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                Icon(
+                  Icons.calendar_month_rounded,
+                  color: AppColors.primary,
+                  size: 58,
+                ),
+                Positioned(
+                  right: 10,
+                  bottom: 12,
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.surface, width: 3),
+                    ),
+                    child: const Icon(
+                      Icons.add_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
 
@@ -1990,6 +1943,7 @@ class _ActivityPageState extends State<ActivityPage> {
 
           Text(
             'ยังไม่มีกิจกรรม',
+            textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.navy,
               fontSize: 19,
@@ -1997,28 +1951,26 @@ class _ActivityPageState extends State<ActivityPage> {
             ),
           ),
 
-          const SizedBox(height: 7),
+          const SizedBox(height: 6),
 
           Text(
-            'สร้างกิจกรรมส่วนตัว หรือแชร์แผนให้กลุ่มได้',
-
+            'บันทึกกิจกรรมส่วนตัว หรือแชร์ให้ครอบครัว',
             textAlign: TextAlign.center,
-
-            style: TextStyle(color: AppColors.muted, fontSize: 12),
+            style: TextStyle(color: AppColors.muted, fontSize: 14),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 22),
 
-          SizedBox(
-            width: 210,
-
-            child: ElevatedButton.icon(
-              onPressed: showCreateActivitySheet,
-
-              icon: const Icon(Icons.add_rounded),
-
-              label: const Text('เพิ่มกิจกรรม'),
+          FilledButton.icon(
+            onPressed: isCreating ? null : showCreateActivitySheet,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(200, 48),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('เพิ่มกิจกรรม'),
           ),
         ],
       ),
@@ -2089,62 +2041,26 @@ class _ActivityPageState extends State<ActivityPage> {
             children: [
               buildPlannerHeader(),
 
-              const SizedBox(height: 25),
+              const SizedBox(height: 22),
 
               Row(
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-
-                      children: [
-                        Text(
-                          'กิจกรรม',
-                          style: TextStyle(
-                            color: AppColors.navy,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-
-                        SizedBox(height: 3),
-
-                        Text(
-                          'แผนส่วนตัวและกิจกรรมของกลุ่ม',
-
-                          style: TextStyle(
-                            color: AppColors.muted,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 5,
-                    ),
-
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.09),
-
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-
                     child: Text(
-                      '${counts[selectedFilter] ?? displayed.length} รายการ',
-
+                      'กิจกรรม',
                       style: TextStyle(
-                        color: AppColors.primary,
-
-                        fontSize: 10,
-
-                        fontWeight: FontWeight.w700,
+                        color: AppColors.navy,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
+
+                  if ((counts[selectedFilter] ?? displayed.length) > 0)
+                    Text(
+                      '${counts[selectedFilter] ?? displayed.length} รายการ',
+                      style: TextStyle(color: AppColors.muted, fontSize: 13),
+                    ),
                 ],
               ),
 
@@ -2341,7 +2257,6 @@ class _VisibilityBadge extends StatelessWidget {
 
 class _FilterChip extends StatelessWidget {
   final String text;
-  final IconData? icon;
   final bool selected;
   final VoidCallback onTap;
 
@@ -2349,59 +2264,39 @@ class _FilterChip extends StatelessWidget {
     required this.text,
     required this.selected,
     required this.onTap,
-    this.icon,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-
-      borderRadius: BorderRadius.circular(99),
-
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-
-        decoration: BoxDecoration(
-          color: selected ? AppColors.primary : AppColors.surface,
-
-          borderRadius: BorderRadius.circular(99),
-
-          border: Border.all(
-            color: selected ? AppColors.primary : AppColors.border,
-          ),
-        ),
-
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-
-          children: [
-            if (icon != null) ...[
-              Icon(
-                icon,
-
-                size: 15,
-
-                color: selected ? Colors.white : AppColors.muted,
-              ),
-
-              const SizedBox(width: 5),
-            ],
-
-            Text(
-              text,
-
-              style: TextStyle(
-                color: selected ? Colors.white : AppColors.muted,
-
-                fontSize: 11,
-
-                fontWeight: FontWeight.w700,
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(999),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            constraints: const BoxConstraints(minHeight: 40),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            decoration: BoxDecoration(
+              color: selected ? AppColors.primary : AppColors.surface,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: selected ? AppColors.primary : AppColors.border,
               ),
             ),
-          ],
+            child: Text(
+              text,
+              style: TextStyle(
+                color: selected ? Colors.white : AppColors.navy,
+                fontSize: 14,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -2416,46 +2311,35 @@ class _PlannerStat extends StatelessWidget {
   final String value;
   final String label;
 
-  const _PlannerStat({required this.value, required this.label});
+  // เลยกำหนดและยังมีค้าง → ตัวเลขสีแดง
+  final bool alert;
+
+  const _PlannerStat({
+    required this.value,
+    required this.label,
+    this.alert = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.10),
-
-          borderRadius: BorderRadius.circular(15),
-        ),
-
-        child: Column(
-          children: [
-            Text(
-              value,
-
-              style: const TextStyle(
-                color: Colors.white,
-
-                fontSize: 18,
-
-                fontWeight: FontWeight.w800,
-              ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              color: alert ? AppColors.danger : AppColors.navy,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
             ),
-
-            const SizedBox(height: 2),
-
-            Text(
-              label,
-
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.67),
-                fontSize: 9,
-              ),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.muted, fontSize: 13),
+          ),
+        ],
       ),
     );
   }

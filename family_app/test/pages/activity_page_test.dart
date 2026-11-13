@@ -96,7 +96,7 @@ void main() {
 
       // จำนวนจากเซิร์ฟเวอร์ (ไม่ใช่แค่ 20 รายการที่โหลด)
       expect(find.text('40 รายการ'), findsOneWidget);
-      expect(find.text('เกินกำหนด 3'), findsOneWidget);
+      expect(find.text('เลยกำหนด 3'), findsOneWidget);
 
       // เลื่อนลง → หน้า 2
       await tester.drag(find.byType(ListView).first, const Offset(0, -6000));
