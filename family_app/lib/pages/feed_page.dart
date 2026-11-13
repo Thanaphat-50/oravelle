@@ -3195,18 +3195,15 @@ class _FeedPageState extends State<FeedPage> {
       button: true,
       label: 'แบ่งปันเรื่องราวกับกลุ่ม',
       excludeSemantics: true,
-      child: Material(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
+      // เงาอยู่นอกการ์ด (Container) / ระลอกตอนแตะอยู่ในการ์ด (Material ใส)
+      child: Container(
+        decoration: AppDecorations.card(radius: 20),
+        child: Material(
+          color: Colors.transparent,
           borderRadius: BorderRadius.circular(20),
-          onTap: openComposer,
-          child: Ink(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              border: AppDecorations.cardBorder,
-              boxShadow: AppDecorations.cardShadow,
-            ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: openComposer,
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Row(
@@ -4628,11 +4625,13 @@ class _FeedPageState extends State<FeedPage> {
             // เว้นด้านล่างไว้ไม่ให้ปุ่ม + บังโพสต์สุดท้าย
             padding: EdgeInsets.fromLTRB(16, 12, 16, isMainFeed ? 96 : 32),
             children: [
-              // ฟีดหลักมีหัวข้อ + ตัวกรอง / หน้าโปรไฟล์ใช้ header ของตัวเอง
+              // header ของหน้าที่เรียกใช้ (โปรไฟล์ / การ์ดกลุ่ม)
+              // + ฟีดหลักมีหัวข้อ ตัวกรอง และช่องชวนโพสต์ของกลุ่ม
               if (widget.header != null) ...[
                 widget.header!,
                 const SizedBox(height: 14),
-              ] else if (isMainFeed) ...[
+              ],
+              if (isMainFeed) ...[
                 buildSectionHeader(),
                 const SizedBox(height: 12),
               ],

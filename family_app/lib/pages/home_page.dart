@@ -2713,7 +2713,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final List members = family['members'] as List? ?? [];
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: AppDecorations.card(radius: 20),
       child: Row(
@@ -3083,7 +3082,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
 
-              child: Material(
+              child: DecoratedBox(
+                // เงาอยู่นอกการ์ด (วาดใต้ InkWell จะทับพื้นขาวจนการ์ดเป็นสีเทา)
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: AppDecorations.cardShadow,
+                ),
+                child: Material(
                 color: AppColors.surface,
 
                 borderRadius: BorderRadius.circular(20),
@@ -3100,7 +3105,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 borderRadius: BorderRadius.circular(20),
 
                 border: AppDecorations.cardBorder,
-                boxShadow: AppDecorations.cardShadow,
               ),
 
               child: Row(
@@ -3234,6 +3238,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ),
                   ),
                 ),
+              ),
               ),
             );
           }),

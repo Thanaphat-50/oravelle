@@ -89,7 +89,7 @@ class _AccountDrawerState extends State<AccountDrawer> {
 
     final String role = profile?['role'] == 'owner' ? 'เจ้าของกลุ่ม' : 'สมาชิก';
 
-    return '${family['name']} · $role';
+    return '${family['name']} • $role';
   }
 
   // ปิดเมนูก่อน แล้วค่อยให้หน้าหลักเปิดหน้าที่เลือก
