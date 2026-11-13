@@ -48,7 +48,11 @@ class _MapPageState extends State<MapPage> {
 
   DateTime? lastRefresh;
 
-  String? locationError;
+  // ปัญหาตำแหน่งของเครื่องเรา (null = ใช้ได้)
+  _LocationProblem? locationProblem;
+
+  // กลับเข้าแอป (เช่น จากหน้าตั้งค่า) → เช็กสิทธิ์ตำแหน่งใหม่
+  late final AppLifecycleListener lifecycle;
 
   // สมาชิกที่กำลังดูรายละเอียด (วาดเส้นทางจากเราไปหา)
   int? focusedUserId;
@@ -247,6 +251,8 @@ class _MapPageState extends State<MapPage> {
   void initState() {
     super.initState();
 
+    lifecycle = AppLifecycleListener(onResume: recheckLocation);
+
     loadBackgroundInvite();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -285,7 +291,7 @@ class _MapPageState extends State<MapPage> {
         if (!mounted) return;
 
         setState(() {
-          locationError = 'กรุณาเปิด Location ของอุปกรณ์';
+          locationProblem = _LocationProblem.serviceOff;
         });
 
         return;
@@ -301,7 +307,7 @@ class _MapPageState extends State<MapPage> {
         if (!mounted) return;
 
         setState(() {
-          locationError = 'กรุณาอนุญาตการเข้าถึงตำแหน่ง';
+          locationProblem = _LocationProblem.denied;
         });
 
         return;
@@ -311,7 +317,7 @@ class _MapPageState extends State<MapPage> {
         if (!mounted) return;
 
         setState(() {
-          locationError = 'สิทธิ์ตำแหน่งถูกปิดถาวร กรุณาเปิดจาก Settings';
+          locationProblem = _LocationProblem.deniedForever;
         });
 
         return;
@@ -321,7 +327,7 @@ class _MapPageState extends State<MapPage> {
 
       setState(() {
         locationAllowed = true;
-        locationError = null;
+        locationProblem = null;
       });
 
       const settings = LocationSettings(accuracy: LocationAccuracy.high);
@@ -350,10 +356,68 @@ class _MapPageState extends State<MapPage> {
       if (!mounted) return;
 
       setState(() {
-        locationError = 'ไม่สามารถอ่านตำแหน่งได้';
+        locationProblem = _LocationProblem.failed;
       });
     } finally {
       isLoadingLocation = false;
+    }
+  }
+
+  // แถบเตือนตำแหน่ง → "เปิดตั้งค่า"
+  // - ปิดตำแหน่งของเครื่อง → หน้าตั้งค่าตำแหน่ง
+  // - ไม่อนุญาตถาวร → หน้าตั้งค่าแอป
+  // - ยังขอสิทธิ์ได้ / อ่านตำแหน่งไม่สำเร็จ → ขอสิทธิ์หรืออ่านใหม่
+  Future<void> fixLocationProblem() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        await Geolocator.openLocationSettings();
+
+        return;
+      }
+
+      // ถูกปฏิเสธถาวร (รู้จากผลขอสิทธิ์ครั้งก่อน หรือจากการเช็ก) → ขอซ้ำไม่ได้แล้ว
+      if (locationProblem == _LocationProblem.deniedForever ||
+          await Geolocator.checkPermission() ==
+              LocationPermission.deniedForever) {
+        await Geolocator.openAppSettings();
+
+        return;
+      }
+    } catch (_) {
+      // เช็กไม่ได้ → ลองอ่านตำแหน่งตามปกติ
+    }
+
+    await prepareLocation();
+  }
+
+  // กลับเข้าแอป (เช่น จากหน้าตั้งค่า) → เปิดสิทธิ์และตำแหน่งแล้วจึงเริ่มใช้ทันที
+  // ห้ามขอสิทธิ์ตรงนี้: หน้าต่างขอสิทธิ์ทำให้แอปพัก/กลับมาใหม่ → วนไม่จบ
+  Future<void> recheckLocation() async {
+    if (locationProblem == null || isLoadingLocation) return;
+
+    try {
+      final bool service = await Geolocator.isLocationServiceEnabled();
+
+      final LocationPermission permission = await Geolocator.checkPermission();
+
+      if (service &&
+          (permission == LocationPermission.always ||
+              permission == LocationPermission.whileInUse)) {
+        await prepareLocation();
+
+        return;
+      }
+
+      if (!mounted) return;
+
+      // ยังแก้ไม่ครบ → ปรับแค่ข้อความบนแถบเตือน
+      if (!service) {
+        setState(() => locationProblem = _LocationProblem.serviceOff);
+      } else if (locationProblem == _LocationProblem.serviceOff) {
+        setState(() => locationProblem = _LocationProblem.denied);
+      }
+    } catch (_) {
+      // เช็กไม่ได้ → รอผู้ใช้กด "เปิดตั้งค่า" เอง
     }
   }
 
@@ -430,6 +494,8 @@ class _MapPageState extends State<MapPage> {
         locationsVersion.value++;
 
         prepareStatusBubbles();
+
+        prepareAvatarPins();
 
         if (!shownFamilyFirst &&
             currentPosition == null &&
@@ -764,7 +830,7 @@ class _MapPageState extends State<MapPage> {
     const double padX = 11;
     const double padY = 6;
     const double tail = 7;
-    const double pinGap = 42;
+    const double pinGap = pinHeight + 2;
     const double margin = 4;
 
     final TextPainter painter = TextPainter(
@@ -832,6 +898,213 @@ class _MapPageState extends State<MapPage> {
     );
 
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
+
+    return BitmapDescriptor.bytes(
+      data!.buffer.asUint8List(),
+      imagePixelRatio: ratio,
+    );
+  }
+
+  // =====================================================
+  // หมุดรูปโปรไฟล์ (วงกลมขอบขาว + ปลายแหลมชี้ตำแหน่ง)
+  // Marker ใส่ Widget ไม่ได้ จึงวาดเป็นรูป / ยังวาดไม่เสร็จ → หมุดปกติ
+  // =====================================================
+
+  static const double pinCircle = 42;
+  static const double pinRing = 3;
+  static const double pinTail = 8;
+  static const double pinMargin = 4;
+
+  // ความสูงหมุดเหนือจุดที่ปัก (ป้ายข้อความลอยเหนือระยะนี้)
+  static const double pinHeight = pinCircle + pinRing * 2 + pinTail;
+
+  // จุดยึด = ปลายแหลมของหมุด
+  static const Offset pinAnchor = Offset(
+    0.5,
+    (pinMargin + pinHeight) / (pinHeight + pinMargin * 2),
+  );
+
+  final Map<String, BitmapDescriptor> avatarPins = {};
+
+  final Set<String> drawingPins = {};
+
+  String pinKey(Map<String, dynamic> location) =>
+      '${isMe(location)}|${getProfileImageUrl(location) ?? ''}|'
+      '${getMemberName(location)}';
+
+  // วาดหมุดของสมาชิกที่ยังไม่มีรูปหมุด แล้ววาดแผนที่ใหม่
+  Future<void> prepareAvatarPins() async {
+    if (!mounted) return;
+
+    final double ratio = MediaQuery.devicePixelRatioOf(context);
+
+    bool added = false;
+
+    for (final location in List.of(familyLocations)) {
+      final String key = pinKey(location);
+
+      if (avatarPins.containsKey(key) || !drawingPins.add(key)) continue;
+
+      ui.Image? photo;
+
+      try {
+        photo = await loadPinPhoto(getProfileImageUrl(location));
+
+        avatarPins[key] = await drawAvatarPin(
+          photo: photo,
+          name: getMemberName(location),
+          me: isMe(location),
+          ratio: ratio,
+        );
+
+        added = true;
+      } catch (_) {
+        // วาดไม่ได้ → ใช้หมุดปกติ
+      } finally {
+        photo?.dispose();
+
+        drawingPins.remove(key);
+      }
+    }
+
+    if (added && mounted) setState(() {});
+  }
+
+  // รูปโปรไฟล์สำหรับหมุด (ไม่มีรูป / โหลดไม่ได้ → null = ใช้ตัวอักษรแรกของชื่อ)
+  static Future<ui.Image?> loadPinPhoto(String? url) async {
+    final String value = url?.trim() ?? '';
+
+    if (value.isEmpty) return null;
+
+    final Completer<ui.Image?> done = Completer<ui.Image?>();
+
+    final ImageStream stream = NetworkImage(value)
+        .resolve(ImageConfiguration.empty);
+
+    final ImageStreamListener listener = ImageStreamListener(
+      (info, _) {
+        if (!done.isCompleted) done.complete(info.image.clone());
+
+        info.dispose();
+      },
+      onError: (_, _) {
+        if (!done.isCompleted) done.complete(null);
+      },
+    );
+
+    stream.addListener(listener);
+
+    try {
+      return await done.future.timeout(
+        const Duration(seconds: 8),
+        onTimeout: () => null,
+      );
+    } finally {
+      stream.removeListener(listener);
+    }
+  }
+
+  static Future<BitmapDescriptor> drawAvatarPin({
+    required ui.Image? photo,
+    required String name,
+    required bool me,
+    required double ratio,
+  }) async {
+    final double outer = (pinCircle + pinRing * 2) * ratio;
+    final double margin = pinMargin * ratio;
+    final double width = outer + margin * 2;
+    final double height = (pinHeight + pinMargin * 2) * ratio;
+    final double radius = outer / 2;
+
+    final Offset center = Offset(width / 2, margin + radius);
+
+    final Path shape = Path.combine(
+      PathOperation.union,
+      Path()..addOval(Rect.fromCircle(center: center, radius: radius)),
+      Path()
+        ..moveTo(center.dx - radius * 0.45, center.dy + radius * 0.89)
+        ..lineTo(center.dx, (pinMargin + pinHeight) * ratio)
+        ..lineTo(center.dx + radius * 0.45, center.dy + radius * 0.89)
+        ..close(),
+    );
+
+    final ui.PictureRecorder recorder = ui.PictureRecorder();
+
+    final Canvas canvas = Canvas(recorder);
+
+    canvas.drawShadow(shape, Colors.black, 2.5 * ratio, false);
+
+    // ขอบหมุด: ของเรา = สีหลัก / คนอื่น = ขาว
+    canvas.drawPath(
+      shape,
+      Paint()..color = me ? AppColors.primary : Colors.white,
+    );
+
+    final Rect photoRect = Rect.fromCircle(
+      center: center,
+      radius: pinCircle / 2 * ratio,
+    );
+
+    canvas.save();
+
+    canvas.clipPath(Path()..addOval(photoRect));
+
+    if (photo != null) {
+      // ครอบกลางรูปให้เป็นสี่เหลี่ยมจัตุรัส
+      final double side =
+          (photo.width < photo.height ? photo.width : photo.height).toDouble();
+
+      canvas.drawImageRect(
+        photo,
+        Rect.fromCenter(
+          center: Offset(photo.width / 2, photo.height / 2),
+          width: side,
+          height: side,
+        ),
+        photoRect,
+        Paint()..filterQuality = FilterQuality.medium,
+      );
+    } else {
+      canvas.drawRect(
+        photoRect,
+        Paint()
+          ..shader = ui.Gradient.linear(
+            photoRect.topLeft,
+            photoRect.bottomRight,
+            [AppColors.primary, const Color(0xFF767BFF)],
+          ),
+      );
+
+      final String trimmed = name.trim();
+
+      final TextPainter painter = TextPainter(
+        text: TextSpan(
+          text: trimmed.isEmpty ? '?' : trimmed.characters.first.toUpperCase(),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: pinCircle * 0.4 * ratio,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+      painter.paint(
+        canvas,
+        center - Offset(painter.width / 2, painter.height / 2),
+      );
+    }
+
+    canvas.restore();
+
+    final ui.Image image = await recorder.endRecording().toImage(
+      width.ceil(),
+      height.ceil(),
+    );
+
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+
+    image.dispose();
 
     return BitmapDescriptor.bytes(
       data!.buffer.asUint8List(),
@@ -970,35 +1243,41 @@ class _MapPageState extends State<MapPage> {
     }
   }
 
-  // บรรทัดสั้นใต้ชื่อ: "1.2 กม. · 3 นาทีที่แล้ว"
+  // บรรทัดใต้ชื่อ: "อัปเดต 3 นาทีที่แล้ว" / คนอื่น: "1.2 กม. · อัปเดต 3 นาทีที่แล้ว"
   String memberSummary(Map<String, dynamic> location) {
-    final String lastSeen = formatLastSeen(location['last_seen_at']);
+    final String updated = updatedAgo(location);
 
-    if (isMe(location)) return 'คุณ · $lastSeen';
+    if (isMe(location)) return updated;
 
     final double? distance = distanceTo(location);
 
     return distance == null
-        ? lastSeen
-        : '${formatDistance(distance)} · $lastSeen';
+        ? updated
+        : '${formatDistance(distance)} · $updated';
   }
 
+  // อัปเดตเมื่อสักครู่ / อัปเดต 11 นาทีที่แล้ว
+  String updatedAgo(Map<String, dynamic> location) {
+    if (lastSeenOf(location) == null) return 'ยังไม่มีข้อมูลเวลา';
+
+    final String ago = formatLastSeen(location['last_seen_at']);
+
+    return ago == 'เมื่อสักครู่' ? 'อัปเดตเมื่อสักครู่' : 'อัปเดต $ago';
+  }
+
+  // บรรทัดใต้หัวการ์ดบนแผนที่
   String getSyncText() {
     if (lastRefresh == null) {
-      return 'กำลังซิงก์';
+      return 'กำลังโหลดตำแหน่ง...';
     }
 
     final difference = DateTime.now().difference(lastRefresh!);
 
-    if (difference.inSeconds < 15) {
-      return 'อัปเดตล่าสุด';
-    }
-
     if (difference.inMinutes < 1) {
-      return '${difference.inSeconds} วินาทีที่แล้ว';
+      return 'อัปเดตเมื่อสักครู่';
     }
 
-    return '${difference.inMinutes} นาทีที่แล้ว';
+    return 'อัปเดต ${difference.inMinutes} นาทีที่แล้ว';
   }
 
   // =====================================================
@@ -1023,17 +1302,24 @@ class _MapPageState extends State<MapPage> {
 
       final name = getMemberName(location);
 
+      final BitmapDescriptor? pin = avatarPins[pinKey(location)];
+
       markers.add(
         Marker(
           markerId: MarkerId('family_$userId'),
 
           position: LatLng(latitude, longitude),
 
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            index.isEven
-                ? BitmapDescriptor.hueViolet
-                : BitmapDescriptor.hueAzure,
-          ),
+          // หมุดรูปโปรไฟล์ (ยังวาดไม่เสร็จ → หมุดปกติ)
+          icon:
+              pin ??
+              BitmapDescriptor.defaultMarkerWithHue(
+                index.isEven
+                    ? BitmapDescriptor.hueViolet
+                    : BitmapDescriptor.hueAzure,
+              ),
+
+          anchor: pin == null ? const Offset(0.5, 1) : pinAnchor,
 
           infoWindow: InfoWindow(
             title: isMe(location) ? '$name (คุณ)' : name,
@@ -2586,21 +2872,19 @@ class _MapPageState extends State<MapPage> {
       right: 14,
 
       child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 12, 9, 12),
+        padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
 
         decoration: BoxDecoration(
           color: AppColors.surface,
 
-          borderRadius: BorderRadius.circular(21),
+          borderRadius: BorderRadius.circular(20),
 
           border: AppDecorations.cardBorder,
 
           boxShadow: [
             BoxShadow(
               color: AppColors.navy.withValues(alpha: 0.10),
-
               blurRadius: 25,
-
               offset: const Offset(0, 8),
             ),
           ],
@@ -2609,65 +2893,43 @@ class _MapPageState extends State<MapPage> {
         child: Row(
           children: [
             Container(
-              width: 45,
-              height: 45,
-
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [AppColors.primary, Color(0xFF777CFF)],
-                ),
-
-                borderRadius: BorderRadius.circular(15),
+                color: AppColors.softPrimary,
+                borderRadius: BorderRadius.circular(14),
               ),
-
-              child: const Icon(
+              child: Icon(
                 Icons.location_on_rounded,
-                color: Colors.white,
+                color: AppColors.primary,
                 size: 24,
               ),
             ),
 
-            const SizedBox(width: 11),
+            const SizedBox(width: 12),
 
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        'Family Map',
-                        style: TextStyle(
-                          color: AppColors.navy,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-
-                      const SizedBox(width: 7),
-
-                      Container(
-                        width: 7,
-                        height: 7,
-
-                        decoration: BoxDecoration(
-                          color: locationAllowed
-                              ? AppColors.success
-                              : AppColors.warm,
-
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    'สมาชิกบนแผนที่ ${familyLocations.length} คน',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
 
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 1),
 
                   Text(
-                    '${familyLocations.length} สมาชิก • ${getSyncText()}',
-                    style: TextStyle(color: AppColors.muted, fontSize: 10),
+                    getSyncText(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: AppColors.muted, fontSize: 12),
                   ),
                 ],
               ),
@@ -2675,12 +2937,8 @@ class _MapPageState extends State<MapPage> {
 
             IconButton(
               tooltip: 'รีเฟรช',
-
-              onPressed: () async {
-                await loadFamilyLocations();
-              },
-
-              icon: Icon(Icons.refresh_rounded, color: AppColors.primary),
+              onPressed: loadFamilyLocations,
+              icon: Icon(Icons.refresh_rounded, color: AppColors.navy),
             ),
           ],
         ),
@@ -2689,13 +2947,23 @@ class _MapPageState extends State<MapPage> {
   }
 
   // =====================================================
-  // LOCATION ERROR
+  // LOCATION ERROR: แถบเหลือง "ยังไม่ได้เปิดสิทธิ์ตำแหน่ง" + เปิดตั้งค่า
   // =====================================================
 
   Widget buildLocationError() {
-    if (locationError == null) {
+    final _LocationProblem? problem = locationProblem;
+
+    if (problem == null) {
       return buildSharingNotice();
     }
+
+    final String message = switch (problem) {
+      _LocationProblem.serviceOff => 'ยังไม่ได้เปิดตำแหน่งของเครื่อง',
+      _LocationProblem.failed => 'อ่านตำแหน่งของคุณไม่สำเร็จ',
+      _ => 'ยังไม่ได้เปิดสิทธิ์ตำแหน่ง',
+    };
+
+    final bool dark = AppColors.isDark;
 
     return Positioned(
       top: 88,
@@ -2703,45 +2971,46 @@ class _MapPageState extends State<MapPage> {
       right: 14,
 
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(12, 5, 6, 5),
 
         decoration: BoxDecoration(
-          color: AppColors.softWarm,
+          color: dark ? AppColors.softWarm : const Color(0xFFFFF8E1),
 
-          borderRadius: BorderRadius.circular(17),
+          borderRadius: BorderRadius.circular(16),
 
-          border: Border.all(color: AppColors.warm.withValues(alpha: 0.4)),
+          border: Border.all(
+            color: dark
+                ? AppColors.warm.withValues(alpha: 0.4)
+                : const Color(0xFFFFE08A),
+          ),
         ),
 
         child: Row(
           children: [
             Icon(
-              Icons.location_disabled_rounded,
-              color: AppColors.warm,
-              size: 21,
+              Icons.warning_amber_rounded,
+              color: dark ? AppColors.warm : const Color(0xFFF59E0B),
+              size: 22,
             ),
 
-            const SizedBox(width: 9),
+            const SizedBox(width: 10),
 
             Expanded(
               child: Text(
-                locationError!,
-                style: TextStyle(color: AppColors.navy, fontSize: 11),
+                message,
+                style: TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
 
             TextButton(
-              onPressed: () async {
-                final permission = await Geolocator.checkPermission();
-
-                if (permission == LocationPermission.deniedForever) {
-                  await Geolocator.openAppSettings();
-                } else {
-                  await prepareLocation();
-                }
-              },
-
-              child: const Text('แก้ไข'),
+              onPressed: fixLocationProblem,
+              child: Text(
+                problem == _LocationProblem.failed ? 'ลองใหม่' : 'เปิดตั้งค่า',
+              ),
             ),
           ],
         ),
@@ -2885,224 +3154,207 @@ class _MapPageState extends State<MapPage> {
       right: 0,
       bottom: 0,
 
-      child: Container(
-        height: 150,
+      // แผงสูงคงที่ → จำกัดขนาดตัวอักษรไม่ให้ล้นการ์ด
+      child: MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.2,
+        child: Container(
+          height: 150,
 
-        decoration: BoxDecoration(
-          color: AppColors.surface,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
 
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(27)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(27)),
 
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.navy.withValues(alpha: 0.11),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.navy.withValues(alpha: 0.11),
+                blurRadius: 28,
+                offset: const Offset(0, -8),
+              ),
+            ],
+          ),
 
-              blurRadius: 28,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 9),
 
-              offset: const Offset(0, -8),
-            ),
-          ],
-        ),
-
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 9),
-
-            Center(
-              child: Container(
-                width: 38,
-                height: 4,
-
-                decoration: BoxDecoration(
-                  color: AppColors.border,
-
-                  borderRadius: BorderRadius.circular(999),
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                 ),
               ),
-            ),
 
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-
-              child: Row(
-                children: [
-                  Text(
-                    'สมาชิกในแผนที่',
-                    style: TextStyle(
-                      color: AppColors.navy,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: Row(
+                  children: [
+                    Text(
+                      'สมาชิกบนแผนที่',
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
+
+                    const SizedBox(width: 8),
+
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.softPrimary,
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                      child: Text(
+                        '${familyLocations.length}',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              Expanded(
+                child: familyLocations.isEmpty
+                    ? Center(
+                        child: Text(
+                          'ยังไม่มีตำแหน่งของสมาชิกในกลุ่ม',
+                          style: TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 13,
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        itemCount: familyLocations.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 10),
+                        itemBuilder: (context, index) =>
+                            buildMemberCard(familyLocations[index]),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // การ์ดสมาชิกในแผงล่าง: รูป ชื่อ (คุณ) ข้อความบนแผนที่ "อัปเดต X ที่แล้ว" >
+  Widget buildMemberCard(Map<String, dynamic> location) {
+    final String name = getMemberName(location);
+
+    final String? status = statusTextOf(location);
+
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => openMember(location),
+        child: Ink(
+          width: 214,
+          padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _MemberProfileAvatar(
+                    imageUrl: getProfileImageUrl(location),
+                    name: name,
+                    size: 44,
                   ),
 
-                  const Spacer(),
-
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.09),
-
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-
-                    child: Text(
-                      '${familyLocations.length} คน',
-
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
+                  // จุดสถานะ: เขียว = เพิ่งอัปเดต / ส้ม = นานแล้ว
+                  Positioned(
+                    right: -1,
+                    bottom: -1,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: isStale(location)
+                            ? AppColors.warm
+                            : AppColors.success,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.surface, width: 2),
                       ),
                     ),
                   ),
                 ],
               ),
-            ),
 
-            Expanded(
-              child: familyLocations.isEmpty
-                  ? Center(
-                      child: Text(
-                        'ยังไม่มีตำแหน่งของสมาชิกในกลุ่ม',
-                        style: TextStyle(color: AppColors.muted, fontSize: 12),
+              const SizedBox(width: 10),
+
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isMe(location) ? '$name (คุณ)' : name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
                       ),
-                    )
-                  : ListView.separated(
-                      scrollDirection: Axis.horizontal,
-
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-
-                      itemCount: familyLocations.length,
-
-                      separatorBuilder: (_, _) => const SizedBox(width: 9),
-
-                      itemBuilder: (context, index) {
-                        final location = familyLocations[index];
-
-                        final name = getMemberName(location);
-
-                        final profileImageUrl = getProfileImageUrl(location);
-
-                        return InkWell(
-                          borderRadius: BorderRadius.circular(17),
-
-                          onTap: () {
-                            openMember(location);
-                          },
-
-                          child: Container(
-                            width: 178,
-
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 11,
-                              vertical: 8,
-                            ),
-
-                            decoration: BoxDecoration(
-                              color: AppColors.fill,
-
-                              borderRadius: BorderRadius.circular(17),
-
-                              border: Border.all(color: AppColors.border),
-                            ),
-
-                            child: Row(
-                              children: [
-                                _MemberProfileAvatar(
-                                  imageUrl: profileImageUrl,
-                                  name: name,
-                                ),
-
-                                const SizedBox(width: 9),
-
-                                Expanded(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        isMe(location) ? '$name (คุณ)' : name,
-
-                                        maxLines: 1,
-
-                                        overflow: TextOverflow.ellipsis,
-
-                                        style: TextStyle(
-                                          color: AppColors.navy,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-
-                                      if (statusTextOf(location) != null) ...[
-                                        const SizedBox(height: 2),
-
-                                        Text(
-                                          '💬 ${statusTextOf(location)}',
-
-                                          maxLines: 1,
-
-                                          overflow: TextOverflow.ellipsis,
-
-                                          style: TextStyle(
-                                            color: AppColors.primary,
-                                            fontSize: 10.5,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ],
-
-                                      const SizedBox(height: 3),
-
-                                      Row(
-                                        children: [
-                                          Container(
-                                            width: 6,
-                                            height: 6,
-
-                                            decoration: BoxDecoration(
-                                              color: isStale(location)
-                                                  ? AppColors.warm
-                                                  : AppColors.success,
-                                              shape: BoxShape.circle,
-                                            ),
-                                          ),
-
-                                          const SizedBox(width: 5),
-
-                                          Expanded(
-                                            child: Text(
-                                              memberSummary(location),
-
-                                              maxLines: 1,
-
-                                              overflow: TextOverflow.ellipsis,
-
-                                              style: TextStyle(
-                                                color: AppColors.muted,
-                                                fontSize: 9,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
                     ),
-            ),
-          ],
+
+                    if (status != null) ...[
+                      const SizedBox(height: 1),
+
+                      Text(
+                        '💬 $status',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 2),
+
+                    Text(
+                      memberSummary(location),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+
+              Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.muted,
+                size: 22,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -3178,8 +3430,9 @@ class _MapPageState extends State<MapPage> {
           buildingsEnabled: true,
 
           // เว้นขอบให้จุดไม่ถูกการ์ด/แผ่นรายละเอียดบัง
+          // มีแถบเตือนตำแหน่ง → เว้นด้านบนเพิ่ม หมุดจะไม่ไปอยู่ใต้แถบ
           padding: EdgeInsets.only(
-            top: 90,
+            top: locationProblem == null ? 90 : 146,
             right: 56,
             bottom: detailOpen ? height * detailSize + 8 : 155,
           ),
@@ -3192,7 +3445,7 @@ class _MapPageState extends State<MapPage> {
 
         buildLocationError(),
 
-        if (showBackgroundInvite && !detailOpen && locationError == null)
+        if (showBackgroundInvite && !detailOpen && locationProblem == null)
           ValueListenableBuilder<bool?>(
             valueListenable: SettingsService.locationSharing,
             builder: (context, sharing, child) => sharing == false
@@ -3214,6 +3467,8 @@ class _MapPageState extends State<MapPage> {
   @override
   void dispose() {
     refreshTimer?.cancel();
+
+    lifecycle.dispose();
 
     positionSubscription?.cancel();
 
@@ -3436,3 +3691,6 @@ const String darkMapStyle = '''
   {"featureType": "water", "elementType": "labels.text.fill", "stylers": [{"color": "#5c6b80"}]}
 ]
 ''';
+
+// ปัญหาตำแหน่งของเครื่องเรา → ข้อความและปุ่มบนแถบเตือน
+enum _LocationProblem { serviceOff, denied, deniedForever, failed }
