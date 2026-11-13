@@ -2771,6 +2771,149 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
+  // การ์ดกลุ่มหน้าสมาชิก: ชื่อ จำนวนสมาชิก บทบาท แก้ไขชื่อ / รหัสเชิญ คัดลอก สร้างใหม่
+  Widget buildFamilyCard({
+    required String familyName,
+    required int membersCount,
+    required bool isOwner,
+    required String inviteCode,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: AppDecorations.card(radius: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: AppColors.softPrimary,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(
+                  Icons.groups_rounded,
+                  color: AppColors.primary,
+                  size: 34,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      familyName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'สมาชิก $membersCount คน',
+                      style: TextStyle(color: AppColors.muted, fontSize: 13.5),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isOwner
+                            ? const Color(0xFFFEF3C7)
+                            : AppColors.softPrimary,
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                      child: Text(
+                        isOwner ? 'เจ้าของ' : 'สมาชิก',
+                        style: TextStyle(
+                          color: isOwner
+                              ? const Color(0xFF92400E)
+                              : AppColors.primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isOwner)
+                IconButton.outlined(
+                  tooltip: 'แก้ไขชื่อ',
+                  onPressed: editFamilyName,
+                  style: IconButton.styleFrom(
+                    side: BorderSide(color: AppColors.border),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: Icon(Icons.edit_outlined, color: AppColors.primary),
+                ),
+            ],
+          ),
+          if (inviteCode.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.fromLTRB(14, 2, 4, 2),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    'รหัสเชิญ',
+                    style: TextStyle(color: AppColors.muted, fontSize: 13),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      inviteCode,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'คัดลอก',
+                    onPressed: () => copyInviteCode(inviteCode),
+                    icon: Icon(
+                      Icons.content_copy_rounded,
+                      size: 20,
+                      color: AppColors.navy,
+                    ),
+                  ),
+                  if (isOwner) ...[
+                    Container(width: 1, height: 22, color: AppColors.border),
+                    TextButton(
+                      onPressed: regenerateInviteCode,
+                      child: const Text('สร้างรหัสใหม่'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   // =====================================================
   // FAMILY PAGE
   // =====================================================
@@ -2806,321 +2949,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
         children: [
           // ===============================================
-          // FAMILY HERO CARD
+          // การ์ดกลุ่ม (Lavender)
           // ===============================================
-
-          Container(
-            padding: const EdgeInsets.all(23),
-
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF172554),
-                  Color(0xFF4650D8),
-                  Color(0xFF656BFF),
-                ],
-              ),
-
-              borderRadius: BorderRadius.circular(30),
-
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.22),
-                  blurRadius: 30,
-                  offset: const Offset(0, 13),
-                ),
-              ],
-            ),
-
-            child: Stack(
-              children: [
-                Positioned(
-                  right: -45,
-                  top: -70,
-
-                  child: Container(
-                    width: 190,
-                    height: 190,
-
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.12),
-                        width: 1.5,
-                      ),
-                    ),
-                  ),
-                ),
-
-                Positioned(
-                  right: 20,
-                  bottom: -55,
-
-                  child: Container(
-                    width: 120,
-                    height: 120,
-
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-
-                      border: Border.all(
-                        color: AppColors.sky.withValues(alpha: 0.25),
-                      ),
-                    ),
-                  ),
-                ),
-
-                Positioned(
-                  right: 42,
-                  top: 29,
-
-                  child: Container(
-                    width: 10,
-                    height: 10,
-
-                    decoration: BoxDecoration(
-                      color: AppColors.sky,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 11,
-                            vertical: 6,
-                          ),
-
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.13),
-
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-
-                          child: const Text(
-                            'กลุ่มของฉัน',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        ),
-
-                        const Spacer(),
-
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 11,
-                            vertical: 6,
-                          ),
-
-                          decoration: BoxDecoration(
-                            color: isOwner
-                                ? AppColors.warm.withValues(alpha: 0.18)
-                                : Colors.white.withValues(alpha: 0.12),
-
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-
-                          child: Row(
-                            children: [
-                              Icon(
-                                isOwner
-                                    ? Icons.workspace_premium_rounded
-                                    : Icons.person_rounded,
-                                color: isOwner ? AppColors.warm : Colors.white,
-                                size: 14,
-                              ),
-
-                              const SizedBox(width: 5),
-
-                              Text(
-                                isOwner ? 'เจ้าของกลุ่ม' : 'สมาชิก',
-                                style: TextStyle(
-                                  color: isOwner
-                                      ? AppColors.warm
-                                      : Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.2,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                familyName,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 29,
-                                  fontWeight: FontWeight.w800,
-                                  height: 1.15,
-                                ),
-                              ),
-
-                              const SizedBox(height: 8),
-
-                              Text(
-                                'สมาชิก ${members.length} คน',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.76),
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        if (isOwner)
-                          IconButton.filledTonal(
-                            onPressed: editFamilyName,
-
-                            tooltip: 'แก้ไขชื่อ',
-
-                            style: IconButton.styleFrom(
-                              backgroundColor: Colors.white.withValues(
-                                alpha: 0.13,
-                              ),
-                              foregroundColor: Colors.white,
-                            ),
-
-                            icon: const Icon(Icons.edit_rounded, size: 19),
-                          ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 25),
-
-                    Container(
-                      padding: const EdgeInsets.all(14),
-
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.12),
-
-                        borderRadius: BorderRadius.circular(18),
-
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.10),
-                        ),
-                      ),
-
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.key_rounded,
-                            color: AppColors.warm,
-                            size: 20,
-                          ),
-
-                          const SizedBox(width: 10),
-
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'รหัสเชิญ',
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.64),
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.2,
-                                  ),
-                                ),
-
-                                const SizedBox(height: 2),
-
-                                Text(
-                                  inviteCode,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 19,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 2,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          IconButton(
-                            onPressed: () {
-                              copyInviteCode(inviteCode);
-                            },
-
-                            tooltip: 'คัดลอก',
-
-                            icon: const Icon(
-                              Icons.content_copy_rounded,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    if (isOwner) ...[
-                      const SizedBox(height: 12),
-
-                      InkWell(
-                        borderRadius: BorderRadius.circular(14),
-
-                        onTap: regenerateInviteCode,
-
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-
-                          child: const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.refresh_rounded,
-                                color: Colors.white,
-                                size: 17,
-                              ),
-
-                              SizedBox(width: 7),
-
-                              Text(
-                                'สร้างรหัสเชิญใหม่',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
+          buildFamilyCard(
+            familyName: familyName,
+            membersCount: members.length,
+            isOwner: isOwner,
+            inviteCode: inviteCode,
           ),
 
           const SizedBox(height: 14),
@@ -3131,20 +2966,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           Row(
             children: [
               Expanded(
-                child: FilledButton.tonalIcon(
+                child: OutlinedButton.icon(
                   onPressed: inviteByEmail,
-                  icon: const Icon(Icons.person_add_alt_1_rounded, size: 19),
+                  icon: const Icon(Icons.mail_outline_rounded, size: 19),
                   label: const Text('ชวนด้วยอีเมล'),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: OutlinedButton.icon(
+                child: FilledButton.icon(
                   onPressed: inviteCode.isEmpty
                       ? null
                       : () => shareInviteCode(familyName, inviteCode),
-                  icon: const Icon(Icons.ios_share_rounded, size: 19),
-                  label: const Text('ส่งรหัสเชิญ'),
+                  icon: const Icon(Icons.share_outlined, size: 19),
+                  label: const Text('แชร์คำเชิญ'),
                 ),
               ),
             ],
