@@ -175,7 +175,7 @@ class SectionSwitch<T> extends StatelessWidget {
           backgroundColor: AppColors.surface,
           foregroundColor: AppColors.muted,
           selectedBackgroundColor: AppColors.primary,
-          selectedForegroundColor: Colors.white,
+          selectedForegroundColor: AppColors.onPrimary,
           side: BorderSide(color: AppColors.border),
           minimumSize: const Size(0, 46),
           textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),

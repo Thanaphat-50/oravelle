@@ -125,6 +125,13 @@ class ChatBackgroundStore {
     await file.writeAsString(jsonEncode(all), flush: true);
   }
 
+  // บัญชีนี้ตั้งพื้นหลังแชทเองไว้บ้างหรือไม่ (ถามก่อนใช้พื้นหลังของธีมแทน)
+  static Future<bool> hasAnyFor(int userId) async {
+    final Map<String, dynamic> all = await _all();
+
+    return all.keys.any((key) => key.startsWith('$userId|'));
+  }
+
   static Future<ChatBackground?> load(int userId, String room) async {
     final ChatBackground? background = ChatBackground.fromJson(
       (await _all())[keyOf(userId, room)],

@@ -18,6 +18,8 @@ import '../services/notification_service.dart';
 import '../services/profile_service.dart';
 import '../services/push_service.dart';
 import '../services/settings_service.dart';
+import '../services/theme_billing.dart';
+import '../services/theme_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_theming.dart';
 import '../theme/theme_spec.dart';
@@ -129,6 +131,42 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setUpPush();
 
     FamilyService.changes.addListener(onFamilyChanged);
+
+    ThemeService.notice.addListener(showThemeNotice);
+
+    restoreTheme();
+  }
+
+  // ธีมที่บัญชีนี้เลือกไว้ในเครื่องนี้ + ตรวจสิทธิ์ใหม่ (ซื้อค้างจาก Google Play ส่งมาตรวจด้วย)
+  Future<void> restoreTheme() async {
+    await ThemeService.restoreForCurrentUser();
+
+    if (ThemeService.catalog.value?.provider == 'google_play') {
+      ThemePlayBilling.start();
+    }
+  }
+
+  // ธีมถูกเปลี่ยนกลับเป็นธีมฟรีเอง (สิทธิ์ถูกยกเลิก) → บอกเหตุผล
+  void showThemeNotice() {
+    final String? message = ThemeService.notice.value;
+
+    if (message == null || !mounted) return;
+
+    ThemeService.notice.value = null;
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('เปลี่ยนกลับเป็นธีมเริ่มต้น'),
+        content: Text(message),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('รับทราบ'),
+          ),
+        ],
+      ),
+    );
   }
 
   void onFamilyChanged() => loadFamily(showLoading: false);
@@ -3409,6 +3447,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
 
     FamilyService.changes.removeListener(onFamilyChanged);
+
+    ThemeService.notice.removeListener(showThemeNotice);
 
     // ออกจากระบบ / ลบบัญชี → หยุดส่งตำแหน่ง และล้างค่าตั้งค่าของบัญชีนี้
     // (บัญชีถัดไปบนเครื่องนี้ต้องเปิดแชร์ตอนปิดแอปเอง)

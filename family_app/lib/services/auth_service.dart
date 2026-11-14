@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import 'api_helper.dart';
+import 'theme_service.dart';
 import 'app_log.dart';
 import 'device_info_service.dart';
 
@@ -126,8 +127,9 @@ class AuthService {
 
   // เช่น เข้าสู่ระบบด้วย Google / LINE / Facebook
   static Future<void> saveToken(String token) async {
-    // token ใหม่อาจเป็นบัญชีอื่น → ถามเซิร์ฟเวอร์ใหม่เมื่อใช้
+    // token ใหม่อาจเป็นบัญชีอื่น → ถามเซิร์ฟเวอร์ใหม่เมื่อใช้ / ไม่ใช้ธีมและสิทธิ์ของบัญชีก่อน
     currentUserId = null;
+    ThemeService.signedOut();
     await _storage.write(key: _tokenKey, value: token);
   }
 
@@ -137,6 +139,7 @@ class AuthService {
 
   static Future<void> clearToken() async {
     currentUserId = null;
+    ThemeService.signedOut();
     await _storage.delete(key: _tokenKey);
   }
 

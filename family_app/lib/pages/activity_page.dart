@@ -2163,7 +2163,7 @@ class _VisibilityChoice extends StatelessWidget {
               child: Icon(
                 icon,
 
-                color: selected && enabled ? Colors.white : AppColors.muted,
+                color: selected && enabled ? AppColors.onPrimary : AppColors.muted,
 
                 size: 20,
               ),
@@ -2294,7 +2294,7 @@ class _FilterChip extends StatelessWidget {
             child: Text(
               text,
               style: TextStyle(
-                color: selected ? Colors.white : AppColors.navy,
+                color: selected ? AppColors.onPrimary : AppColors.navy,
                 fontSize: 14,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
               ),

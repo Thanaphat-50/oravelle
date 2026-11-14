@@ -125,7 +125,7 @@ class _ChatBackgroundPageState extends State<ChatBackgroundPage> {
         ),
         child: Text(
           text,
-          style: TextStyle(color: mine ? Colors.white : AppColors.navy),
+          style: TextStyle(color: mine ? AppColors.onPrimary : AppColors.navy),
         ),
       ),
     );

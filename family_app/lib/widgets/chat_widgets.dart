@@ -219,7 +219,7 @@ class ChatBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool reduceMotion = MediaQuery.of(context).disableAnimations;
     final TextStyle textStyle = TextStyle(
-      color: mine ? Colors.white : AppColors.navy,
+      color: mine ? AppColors.onPrimary : AppColors.navy,
       fontSize: 15,
       height: 1.4,
     );
@@ -230,7 +230,7 @@ class ChatBubble extends StatelessWidget {
         : chatLinkPattern.hasMatch(body)
         ? ChatLinkText(
             text: body,
-            linkColor: mine ? Colors.white : AppColors.primary,
+            linkColor: mine ? AppColors.onPrimary : AppColors.primary,
             style: textStyle,
           )
         : ExcludeSemantics(child: Text(body, style: textStyle));
@@ -533,7 +533,7 @@ class ChatComposer extends StatelessWidget {
                     ),
                     icon: Icon(
                       showMic ? Icons.mic_rounded : Icons.send_rounded,
-                      color: Colors.white,
+                      color: AppColors.onPrimary,
                       size: 22,
                     ),
                   ),

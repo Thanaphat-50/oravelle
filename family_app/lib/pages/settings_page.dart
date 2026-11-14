@@ -10,6 +10,7 @@ import '../services/profile_service.dart';
 import '../services/settings_service.dart';
 import '../services/social_auth_service.dart';
 import '../theme/app_theme.dart';
+import 'theme_store_page.dart';
 import '../theme/theme_controller.dart';
 import '../widgets/background_location_prompt.dart';
 import '../widgets/community_sheets.dart';
@@ -1430,7 +1431,17 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           ...buildPreferenceSections(),
           buildSectionTitle('การแสดงผล'),
-          buildGroup([buildThemeSelector()]),
+          buildGroup([
+            buildThemeSelector(),
+            buildActionRow(
+              icon: Icons.palette_outlined,
+              title: 'ธีมและการตกแต่ง',
+              subtitle: 'ร้านธีม ธีมของฉัน และลองธีม',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ThemeStorePage()),
+              ),
+            ),
+          ]),
           buildSectionTitle('ความเป็นส่วนตัว'),
           buildGroup([
             buildActionRow(

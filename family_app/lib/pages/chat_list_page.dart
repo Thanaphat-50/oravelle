@@ -419,7 +419,7 @@ class _ChatListPageState extends State<ChatListPage> {
                 Text(
                   label,
                   style: TextStyle(
-                    color: selected ? Colors.white : AppColors.navy,
+                    color: selected ? AppColors.onPrimary : AppColors.navy,
                     fontSize: 14.5,
                     fontWeight: FontWeight.w700,
                   ),
@@ -432,7 +432,7 @@ class _ChatListPageState extends State<ChatListPage> {
                     alignment: Alignment.center,
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     decoration: BoxDecoration(
-                      color: selected ? Colors.white : AppColors.primary,
+                      color: selected ? AppColors.onPrimary : AppColors.primary,
                       borderRadius: BorderRadius.circular(99),
                     ),
                     child: Text(

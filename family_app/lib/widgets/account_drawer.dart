@@ -1,9 +1,6 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
-import '../theme/app_theming.dart';
 import 'user_avatar.dart';
 
 // =======================================================
@@ -116,19 +113,7 @@ class _AccountDrawerState extends State<AccountDrawer> {
         4,
         12,
       ),
-      // ธีมมีภาพหัว → วางใต้ชื่อ (ภาพของธีมออกแบบให้ตัวหนังสืออ่านชัด)
-      decoration: BoxDecoration(
-        color: AppColors.softPrimary,
-        image: switch (AppTheming.decor.header(AppColors.isDark)) {
-          final String path => DecorationImage(
-            image: FileImage(File(path)),
-            fit: BoxFit.cover,
-            alignment: Alignment.topRight,
-            onError: (error, stackTrace) {},
-          ),
-          null => null,
-        },
-      ),
+      color: AppColors.softPrimary,
       child: Row(
         children: [
           Expanded(

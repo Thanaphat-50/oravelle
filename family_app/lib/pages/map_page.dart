@@ -3664,7 +3664,7 @@ class _FamilyMapButton extends StatelessWidget {
             child: Icon(
               icon,
 
-              color: primary ? Colors.white : AppColors.primary,
+              color: primary ? AppColors.onPrimary : AppColors.primary,
 
               size: 22,
             ),

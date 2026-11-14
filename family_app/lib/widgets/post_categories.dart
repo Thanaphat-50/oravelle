@@ -142,7 +142,7 @@ class CategoryChoiceChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color foreground = selected ? Colors.white : AppColors.navy;
+    final Color foreground = selected ? AppColors.onPrimary : AppColors.navy;
 
     return Semantics(
       button: true,

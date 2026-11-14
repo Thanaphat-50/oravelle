@@ -735,7 +735,7 @@ class ChatVoiceTile extends StatelessWidget {
         final double progress = total.inMilliseconds <= 0
             ? 0
             : (position.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0);
-        final Color fore = mine ? Colors.white : AppColors.primary;
+        final Color fore = mine ? AppColors.onPrimary : AppColors.primary;
 
         return Container(
           constraints: const BoxConstraints(maxWidth: 250),
