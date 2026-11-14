@@ -1,7 +1,7 @@
 {
   "format": 1,
   "slug": "cosmic-orbit",
-  "version": 1,
+  "version": 2,
   "name": "Cosmic Orbit",
   "min_app_build": 1,
   "modes": {
@@ -77,8 +77,8 @@
     },
     {
       "path": "header_dark.webp",
-      "sha256": "4ff184383de1e8f5df3d607b07631b0512493bd0c07a5d1986838e9c46c3e531",
-      "size": 21434,
+      "sha256": "daef7d5735bab08444d970fe107ba1a21d95b832d1f99ad9b95fddbb06d66568",
+      "size": 18364,
       "type": "image/webp"
     },
     {

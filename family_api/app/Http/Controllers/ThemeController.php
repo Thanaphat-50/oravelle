@@ -52,6 +52,7 @@ class ThemeController extends Controller
                     'supports_light' => $theme->supports_light,
                     'supports_dark' => $theme->supports_dark,
                     'changes' => $theme->changes ?? [],
+                    'swatch' => $theme->swatch ?? [],
                     'previews' => collect($theme->previews ?? [])->map(fn (string $name) => [
                         'name' => $name,
                         'url' => route('themes.preview', ['slug' => $theme->slug, 'name' => $name]),

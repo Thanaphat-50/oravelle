@@ -21,6 +21,7 @@ class Theme extends Model
         'supports_dark',
         'changes',
         'previews',
+        'swatch',
         'current_version',
         'sort_order',
         'status',
@@ -34,6 +35,7 @@ class Theme extends Model
             'supports_dark' => 'boolean',
             'changes' => 'array',
             'previews' => 'array',
+            'swatch' => 'array',
         ];
     }
 

@@ -16,7 +16,13 @@
       ],
       "products": {},
       "version": 0,
-      "sort_order": 0
+      "sort_order": 0,
+      "swatch": [
+        "#5B5FEF",
+        "#F5F6FA",
+        "#FFFFFF",
+        "#F0F1FF"
+      ]
     },
     {
       "slug": "ocean-blue",
@@ -38,8 +44,14 @@
         "google_play": "theme_ocean_blue",
         "test": "test_theme_ocean_blue"
       },
-      "version": 1,
-      "sort_order": 10
+      "version": 2,
+      "sort_order": 10,
+      "swatch": [
+        "#1F7AE0",
+        "#F3F8FD",
+        "#FFFFFF",
+        "#E6F1FD"
+      ]
     },
     {
       "slug": "matcha-garden",
@@ -52,7 +64,7 @@
       "supports_dark": true,
       "changes": [
         "สีเขียวชา–ครีมทั้งแอป",
-        "กิ่งใบไม้บนแถบหัว เมนูบัญชี และมุมพื้นหลัง",
+        "กิ่งใบไม้บนแถบหัวและมุมพื้นหลัง",
         "ภาพถ้วยชาเขียวในหน้าที่ยังไม่มีข้อมูล",
         "พื้นหลังแชทลายใบไม้",
         "มุมการ์ดและปุ่มโค้งนุ่มกว่าเดิม"
@@ -61,8 +73,14 @@
         "google_play": "theme_matcha_garden",
         "test": "test_theme_matcha_garden"
       },
-      "version": 1,
-      "sort_order": 20
+      "version": 2,
+      "sort_order": 20,
+      "swatch": [
+        "#4E7D3A",
+        "#F7F3E8",
+        "#FFFDF7",
+        "#EAF1E1"
+      ]
     },
     {
       "slug": "cosmic-orbit",
@@ -85,8 +103,14 @@
         "google_play": "theme_cosmic_orbit",
         "test": "test_theme_cosmic_orbit"
       },
-      "version": 1,
-      "sort_order": 30
+      "version": 2,
+      "sort_order": 30,
+      "swatch": [
+        "#8B7CFF",
+        "#070A1A",
+        "#11162E",
+        "#221F4D"
+      ]
     }
   ]
 }

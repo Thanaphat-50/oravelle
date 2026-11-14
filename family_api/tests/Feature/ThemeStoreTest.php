@@ -69,7 +69,7 @@ class ThemeStoreTest extends TestCase
         $this->assertTrue($themes['lavender-original']['owned']);
         $this->assertFalse($themes['ocean-blue']['owned']);
         $this->assertFalse($themes['cosmic-orbit']['supports_light']);
-        $this->assertSame(1, $themes['matcha-garden']['version']);
+        $this->assertSame(2, $themes['matcha-garden']['version']);
         $this->assertNull($response->json('billing.provider'));
         $this->assertNull($themes['ocean-blue']['test_price']);
         $this->assertStringStartsWith('u' . $user->id . '.', $response->json('billing.account_ref'));

@@ -1,7 +1,7 @@
 {
   "format": 1,
   "slug": "matcha-garden",
-  "version": 1,
+  "version": 2,
   "name": "Matcha Garden",
   "min_app_build": 1,
   "modes": {
@@ -95,14 +95,14 @@
     },
     {
       "path": "header_dark.webp",
-      "sha256": "7dd76e14d74e8f1c7e3a2f95e0595f450cfd1acdcc1c635ce21e570a1c644d4f",
-      "size": 18900,
+      "sha256": "be9b66de5ee2a0a94e7e3573488f51caf36dfdc59f3e5ef5f9b73de364d8558f",
+      "size": 11278,
       "type": "image/webp"
     },
     {
       "path": "header_light.webp",
-      "sha256": "1dca6265630e284443c89c94c2893a8b62ca6d5bfc1e1238f09b3c82710447d9",
-      "size": 22612,
+      "sha256": "6bcfebc7b68c7ab05da3447bc782d326b502c14a82c5fea64868cc8953c3cb2e",
+      "size": 13022,
       "type": "image/webp"
     }
   ]

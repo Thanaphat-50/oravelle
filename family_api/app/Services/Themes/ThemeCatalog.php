@@ -174,6 +174,10 @@ class ThemeCatalog
                     'supports_dark' => (bool) ($entry['supports_dark'] ?? true),
                     'changes' => array_values($entry['changes'] ?? []),
                     'previews' => $previews,
+                    'swatch' => array_values(array_filter(
+                        $entry['swatch'] ?? [],
+                        fn ($c) => is_string($c) && preg_match('/^#[0-9A-Fa-f]{6}$/', $c),
+                    )),
                     'sort_order' => (int) ($entry['sort_order'] ?? 0),
                     'status' => 'active',
                 ]);

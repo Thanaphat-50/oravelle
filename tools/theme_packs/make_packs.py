@@ -21,6 +21,10 @@ OUT = os.path.join(ROOT, 'family_api', 'resources', 'themes', 'packs')
 
 SS = 3  # วาดใหญ่แล้วย่อ (ขอบเนียน)
 
+# ภาพหัว (1080x420) วางใต้แถบหัวของหน้าหลัก: ซ้าย = รูปโปรไฟล์+ชื่อหน้า, ขวา (x>680) = ปุ่มไอคอน
+# → ของตกแต่งชิ้นใหญ่วางได้เฉพาะช่องกลาง x 470..690 และแถบบนสุด (ไม่บังข้อความ/ปุ่ม)
+GAP_X = (470, 690)
+
 
 def rgba(hex_, a=255):
     hex_ = hex_.lstrip('#')
@@ -302,7 +306,7 @@ def ocean(folder):
         d = ImageDraw.Draw(img)
         rnd = random.Random(7)
         for _ in range(9):
-            x, y, r = rnd.uniform(700, 1050) * SS, rnd.uniform(40, 220) * SS, rnd.uniform(5, 16) * SS
+            x, y, r = rnd.uniform(*GAP_X) * SS, rnd.uniform(30, 200) * SS, rnd.uniform(5, 16) * SS
             c = (255, 255, 255, 120) if mode == 'light' else (120, 190, 255, 70)
             d.ellipse([x - r, y - r, x + r, y + r], outline=c, width=int(2.5 * SS))
         files['header_' + mode] = save(finish(img, w, h), folder, 'header_%s.webp' % mode)
@@ -351,9 +355,11 @@ def matcha(folder):
         img.alpha_composite(vertical_gradient(w * SS, h * SS, top, top[:3] + (0,)))
         layer = Image.new('RGBA', img.size, (0, 0, 0, 0))
         d = ImageDraw.Draw(layer)
-        branch(d, 1100 * SS, -20 * SS, math.radians(150), 420 * SS, 7, greens[mode], stems[mode], SS)
-        branch(d, 1100 * SS, 120 * SS, math.radians(175), 300 * SS, 5, greens[mode][1:], stems[mode], SS)
-        branch(d, -30 * SS, -10 * SS, math.radians(35), 210 * SS, 4, greens[mode][2:] + greens[mode][:2], stems[mode], SS)
+        branch(d, 600 * SS, -30 * SS, math.radians(118), 210 * SS, 5, greens[mode], stems[mode], SS)
+        branch(d, 610 * SS, -20 * SS, math.radians(62), 170 * SS, 4, greens[mode][1:], stems[mode], SS)
+        rnd = random.Random(13)
+        for x in list(range(250, 430, 45)) + list(range(720, 830, 45)):
+            leaf(d, x * SS, rnd.uniform(8, 34) * SS, rnd.uniform(26, 40) * SS, 12 * SS, rnd.uniform(-0.6, 0.6), greens[mode][rnd.randrange(4)])
         layer.putalpha(layer.getchannel('A').point(lambda a: int(a * (0.85 if mode == 'light' else 0.7))))
         img.alpha_composite(layer)
         files['header_' + mode] = save(finish(img, w, h), folder, 'header_%s.webp' % mode)
@@ -419,10 +425,10 @@ def cosmic(folder):
     img = canvas(w, h)
     img.alpha_composite(vertical_gradient(w * SS, h * SS, rgba('#15123A', 230), rgba('#15123A', 0)))
     stars(img, 90, 9, 2.2 * SS)
-    planet(img, 930 * SS, 120 * SS, 78 * SS, (255, 190, 120), (140, 90, 220), ring=(200, 180, 255, 210))
+    planet(img, 585 * SS, 112 * SS, 46 * SS, (255, 190, 120), (140, 90, 220), ring=(200, 180, 255, 210))
     sp = ImageDraw.Draw(img)
-    sparkle(sp, 720 * SS, 70 * SS, 14 * SS, (255, 230, 170, 230))
-    sparkle(sp, 610 * SS, 150 * SS, 9 * SS, (190, 210, 255, 200))
+    sparkle(sp, 488 * SS, 50 * SS, 13 * SS, (255, 230, 170, 230))
+    sparkle(sp, 668 * SS, 196 * SS, 9 * SS, (190, 210, 255, 200))
     files['header_dark'] = save(finish(img, w, h), folder, 'header_dark.webp')
     # หน้าว่าง: ดาวเคราะห์ + ดาวเทียม
     w, h = 600, 420
@@ -452,7 +458,7 @@ def tokens(**kw):
 
 PACKS = [
     {
-        'slug': 'ocean-blue', 'version': 1, 'name': 'Ocean Blue', 'maker': ocean,
+        'slug': 'ocean-blue', 'version': 2, 'name': 'Ocean Blue', 'maker': ocean,
         'modes': {
             'light': tokens(primary='#1F7AE0', primary_dark='#155DB0', secondary='#10B6C9', background='#F3F8FD',
                             surface='#FFFFFF', fill='#EEF4FA', border='#DCE8F5', soft_primary='#E6F1FD',
@@ -473,7 +479,7 @@ PACKS = [
         },
     },
     {
-        'slug': 'matcha-garden', 'version': 1, 'name': 'Matcha Garden', 'maker': matcha,
+        'slug': 'matcha-garden', 'version': 2, 'name': 'Matcha Garden', 'maker': matcha,
         'modes': {
             'light': tokens(primary='#4E7D3A', primary_dark='#3B6129', secondary='#8FA84F', background='#F7F3E8',
                             surface='#FFFDF7', fill='#F1ECDD', border='#E6DFCB', soft_primary='#EAF1E1',
@@ -494,7 +500,7 @@ PACKS = [
         },
     },
     {
-        'slug': 'cosmic-orbit', 'version': 1, 'name': 'Cosmic Orbit', 'maker': cosmic,
+        'slug': 'cosmic-orbit', 'version': 2, 'name': 'Cosmic Orbit', 'maker': cosmic,
         'modes': {
             'dark': tokens(primary='#8B7CFF', primary_dark='#6F5CF0', secondary='#4DD8FF', background='#070A1A',
                            surface='#11162E', fill='#1A2142', border='#262E55', soft_primary='#221F4D',

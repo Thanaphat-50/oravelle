@@ -34,6 +34,8 @@ return new class extends Migration
                 $table->boolean('supports_dark')->default(true);
                 $table->json('changes')->nullable();
                 $table->json('previews')->nullable();
+                // สีตัวอย่างบนการ์ดในร้าน [หลัก, พื้นหลัง, การ์ด, สีอ่อน]
+                $table->json('swatch')->nullable();
                 $table->unsignedInteger('current_version')->default(0);
                 $table->unsignedInteger('sort_order')->default(0);
                 $table->string('status', 12)->default('active');

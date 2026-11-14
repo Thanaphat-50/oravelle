@@ -1,7 +1,7 @@
 {
   "format": 1,
   "slug": "ocean-blue",
-  "version": 1,
+  "version": 2,
   "name": "Ocean Blue",
   "min_app_build": 1,
   "modes": {
@@ -93,14 +93,14 @@
     },
     {
       "path": "header_dark.webp",
-      "sha256": "972653ef091134aaf773598b86031055a35d3360c1017d6bb54e4f3cee388a46",
-      "size": 12580,
+      "sha256": "ef61d1fcfae89fd874ae144251a39826130de71c16aa298dd707735b385ebe5d",
+      "size": 12620,
       "type": "image/webp"
     },
     {
       "path": "header_light.webp",
-      "sha256": "c7c6fe9bb18c330524e6b6367ab54b08bed08d200ca8f567432e570c478d5136",
-      "size": 10678,
+      "sha256": "dba07b6d5a59754fdfbf7c9532b211ecece02ef2e7a6448d837dffb33bc75af9",
+      "size": 10686,
       "type": "image/webp"
     }
   ]
