@@ -1,0 +1,133 @@
+{
+  "format": 1,
+  "slug": "cosmic-orbit",
+  "version": 1,
+  "name": "Cosmic Orbit",
+  "min_app_build": 1,
+  "modes": {
+    "dark": {
+      "primary": "#8B7CFF",
+      "primary_dark": "#6F5CF0",
+      "secondary": "#4DD8FF",
+      "background": "#070A1A",
+      "surface": "#11162E",
+      "fill": "#1A2142",
+      "border": "#262E55",
+      "soft_primary": "#221F4D",
+      "soft_secondary": "#0F2B45",
+      "text": "#EEF0FF",
+      "text_muted": "#9AA3C7",
+      "text_subtle": "#CDD3F0",
+      "market": "#FFB547",
+      "warning": "#FFB547",
+      "soft_warning": "#3A2C14",
+      "success": "#4BE3A4",
+      "danger": "#FF6B81",
+      "soft_danger": "#3D1726",
+      "shadow": "#66000000",
+      "on_primary": "#0B0A24"
+    }
+  },
+  "shape": {
+    "corner_scale": 0.8
+  },
+  "icons": {
+    "style": "sharp",
+    "files": {
+      "nav_home": "icons/nav_home.png",
+      "nav_shop": "icons/nav_shop.png",
+      "nav_group": "icons/nav_group.png",
+      "nav_map": "icons/nav_map.png",
+      "nav_activity": "icons/nav_activity.png",
+      "search": "icons/search.png",
+      "chat": "icons/chat.png",
+      "bell": "icons/bell.png"
+    }
+  },
+  "decor": {
+    "background": {
+      "dark": "bg_dark.webp"
+    },
+    "header": {
+      "dark": "header_dark.webp"
+    },
+    "empty": "empty.webp",
+    "chat_background": {
+      "dark": "chat_dark.webp"
+    }
+  },
+  "assets": [
+    {
+      "path": "bg_dark.webp",
+      "sha256": "020c8181a6518d53b5401e56088f81922513ec2ba26453ace99ade51e0a927b3",
+      "size": 26954,
+      "type": "image/webp"
+    },
+    {
+      "path": "chat_dark.webp",
+      "sha256": "767987ffdda387a6e2ad8610902f27ae2643642f8c6e6f7cabfea48b217d5b1f",
+      "size": 9162,
+      "type": "image/webp"
+    },
+    {
+      "path": "empty.webp",
+      "sha256": "0156755ff17c37ed21ef16be3ee8bb64134857f197d5288716b31dbf98732a1a",
+      "size": 18192,
+      "type": "image/webp"
+    },
+    {
+      "path": "header_dark.webp",
+      "sha256": "4ff184383de1e8f5df3d607b07631b0512493bd0c07a5d1986838e9c46c3e531",
+      "size": 21434,
+      "type": "image/webp"
+    },
+    {
+      "path": "icons/bell.png",
+      "sha256": "77016886a128cae1e81b11f9d10d0d0853c3e5b3a30273a4c49d849ef6333f27",
+      "size": 2096,
+      "type": "image/png"
+    },
+    {
+      "path": "icons/chat.png",
+      "sha256": "e5fbfd2ecd874e94162309c9022a407b3895748be8e7b7ffe713f981702ee1f0",
+      "size": 2072,
+      "type": "image/png"
+    },
+    {
+      "path": "icons/nav_activity.png",
+      "sha256": "ea17c73ef65db4dc6bac8f2b3299a15ebbf2f3e8b1a54e5b679d0e294923402a",
+      "size": 2174,
+      "type": "image/png"
+    },
+    {
+      "path": "icons/nav_group.png",
+      "sha256": "b105c16c437dca0c32ea5692e33155ac4ba4b2947a1360c68dad012274b6ec78",
+      "size": 2542,
+      "type": "image/png"
+    },
+    {
+      "path": "icons/nav_home.png",
+      "sha256": "8ef9b9ec3577e10c5839cc67923474d0a8727bf960012f9331584fce7f8699d7",
+      "size": 2159,
+      "type": "image/png"
+    },
+    {
+      "path": "icons/nav_map.png",
+      "sha256": "7cbaff1df2c27baf48527d0cfba5d02d67287c3e3a27837c2166c6f6993d046f",
+      "size": 2683,
+      "type": "image/png"
+    },
+    {
+      "path": "icons/nav_shop.png",
+      "sha256": "c63f0d5669757eb03238f7c199360742b1fd6caafd5fbff0ceb35efe7364521c",
+      "size": 2305,
+      "type": "image/png"
+    },
+    {
+      "path": "icons/search.png",
+      "sha256": "41af0dfb7b14e2d17366a8649fa8ca13a9e0e0d110a02aec44109b13a5c20531",
+      "size": 2328,
+      "type": "image/png"
+    }
+  ]
+}

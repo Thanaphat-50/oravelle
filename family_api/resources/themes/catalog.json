@@ -1,0 +1,92 @@
+{
+  "themes": [
+    {
+      "slug": "lavender-original",
+      "name": "Lavender Original",
+      "description": "ม่วงลาเวนเดอร์ดั้งเดิมของ ORAVELLE สบายตา ใช้ได้ทั้งโหมดสว่างและโหมดมืด",
+      "category": "simple",
+      "is_free": true,
+      "target_price_thb": null,
+      "supports_light": true,
+      "supports_dark": true,
+      "changes": [
+        "สีม่วงลาเวนเดอร์ทั้งแอป",
+        "ไอคอนเส้นโค้งมน",
+        "ใช้ได้ทั้งโหมดสว่างและโหมดมืด"
+      ],
+      "products": {},
+      "version": 0,
+      "sort_order": 0
+    },
+    {
+      "slug": "ocean-blue",
+      "name": "Ocean Blue",
+      "description": "ขาว–ฟ้า เรียบสะอาด มีลายคลื่นจาง ๆ บนแถบหัวและพื้นหลัง",
+      "category": "simple",
+      "is_free": false,
+      "target_price_thb": 19,
+      "supports_light": true,
+      "supports_dark": true,
+      "changes": [
+        "สีขาว–ฟ้าทั้งแอป (ปุ่ม ป้าย การ์ด ช่องกรอก)",
+        "ลายคลื่นบนแถบหัวและพื้นหลังหน้าหลัก",
+        "ภาพเรือใบในหน้าที่ยังไม่มีข้อมูล",
+        "พื้นหลังแชทลายฟองอากาศ",
+        "ไอคอนแบบเส้นบาง"
+      ],
+      "products": {
+        "google_play": "theme_ocean_blue",
+        "test": "test_theme_ocean_blue"
+      },
+      "version": 1,
+      "sort_order": 10
+    },
+    {
+      "slug": "matcha-garden",
+      "name": "Matcha Garden",
+      "description": "เขียวชา–ครีม อบอุ่นแบบธรรมชาติ มีกิ่งใบไม้ตกแต่งและภาพถ้วยชาเขียว",
+      "category": "nature",
+      "is_free": false,
+      "target_price_thb": 49,
+      "supports_light": true,
+      "supports_dark": true,
+      "changes": [
+        "สีเขียวชา–ครีมทั้งแอป",
+        "กิ่งใบไม้บนแถบหัว เมนูบัญชี และมุมพื้นหลัง",
+        "ภาพถ้วยชาเขียวในหน้าที่ยังไม่มีข้อมูล",
+        "พื้นหลังแชทลายใบไม้",
+        "มุมการ์ดและปุ่มโค้งนุ่มกว่าเดิม"
+      ],
+      "products": {
+        "google_play": "theme_matcha_garden",
+        "test": "test_theme_matcha_garden"
+      },
+      "version": 1,
+      "sort_order": 20
+    },
+    {
+      "slug": "cosmic-orbit",
+      "name": "Cosmic Orbit",
+      "description": "อวกาศโทนมืด ดวงดาวและเนบิวลา พร้อมชุดไอคอนอวกาศและภาพดาวเคราะห์เฉพาะธีม",
+      "category": "dark",
+      "is_free": false,
+      "target_price_thb": 99,
+      "supports_light": false,
+      "supports_dark": true,
+      "changes": [
+        "โทนอวกาศทั้งแอป (ใช้โหมดมืดเสมอ)",
+        "ชุดไอคอนอวกาศ 8 ไอคอน (แถบล่าง ค้นหา แชท แจ้งเตือน)",
+        "พื้นหลังดวงดาวและเนบิวลา",
+        "ดาวเคราะห์มีวงแหวนบนแถบหัวและหน้าที่ยังไม่มีข้อมูล",
+        "พื้นหลังแชทดวงดาว",
+        "มุมการ์ดและปุ่มคมกว่าเดิม"
+      ],
+      "products": {
+        "google_play": "theme_cosmic_orbit",
+        "test": "test_theme_cosmic_orbit"
+      },
+      "version": 1,
+      "sort_order": 30
+    }
+  ]
+}

@@ -35,3 +35,11 @@ Schedule::command('activities:send-reminders')
     ->cron('*/' . config('reminders.every_minutes') . ' * * * *')
     ->withoutOverlapping(10)
     ->onOneServer();
+
+// ธีม: เพิกถอนสิทธิ์ที่ถูกคืนเงิน/ชาร์จแบ็ก (Google Voided Purchases) + จบธุรกรรมที่ค้าง
+// ยังไม่เปิดขายผ่าน Google Play → คำสั่งจบทันที (ไม่เรียก Google)
+// วันละครั้งพอ (RTDN แจ้งทันทีอยู่แล้ว ส่วนนี้เป็นตัวตรวจซ้ำ) — ประหยัดสำหรับ Scale to zero
+Schedule::command('themes:check-purchases')
+    ->dailyAt('03:30')
+    ->withoutOverlapping(30)
+    ->onOneServer();

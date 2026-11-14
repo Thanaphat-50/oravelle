@@ -62,6 +62,11 @@ class AppServiceProvider extends ServiceProvider
         // - ส่งข้อความเพิ่ม 10 ครั้ง/นาที และ 60 ครั้ง/ชั่วโมง
         // =====================================================
 
+        // ตรวจการซื้อธีม / กู้คืนการซื้อ / ซื้อจำลอง (กันยิงตรวจหลักฐานรัว ๆ)
+        RateLimiter::for('theme-purchase', fn (Request $request) => Limit::perMinute(30)
+            ->by('theme-purchase:' . ($request->user()?->id ?? $request->ip()))
+            ->response($this->tooManyAttempts(...)));
+
         RateLimiter::for('support-ticket', fn (Request $request) => Limit::perHour(10)
             ->by('support-ticket:' . ($request->user()?->id ?? $request->ip()))
             ->response($this->tooManyAttempts(...)));

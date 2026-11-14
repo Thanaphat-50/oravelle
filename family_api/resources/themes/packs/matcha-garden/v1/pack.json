@@ -1,0 +1,109 @@
+{
+  "format": 1,
+  "slug": "matcha-garden",
+  "version": 1,
+  "name": "Matcha Garden",
+  "min_app_build": 1,
+  "modes": {
+    "light": {
+      "primary": "#4E7D3A",
+      "primary_dark": "#3B6129",
+      "secondary": "#8FA84F",
+      "background": "#F7F3E8",
+      "surface": "#FFFDF7",
+      "fill": "#F1ECDD",
+      "border": "#E6DFCB",
+      "soft_primary": "#EAF1E1",
+      "soft_secondary": "#EFF3DF",
+      "text": "#2A3122",
+      "text_muted": "#6E7461",
+      "text_subtle": "#4A5240",
+      "market": "#A8651F",
+      "warning": "#D9A441",
+      "soft_warning": "#FAF0D9",
+      "shadow": "#142A3122"
+    },
+    "dark": {
+      "primary": "#8DB873",
+      "primary_dark": "#76A35C",
+      "secondary": "#B6C77F",
+      "background": "#14170F",
+      "surface": "#1C2116",
+      "fill": "#252B1D",
+      "border": "#313926",
+      "soft_primary": "#26331D",
+      "soft_secondary": "#2A3320",
+      "text": "#EEF0E6",
+      "text_muted": "#A3AA94",
+      "text_subtle": "#D3D8C6",
+      "market": "#D9A05B",
+      "on_primary": "#132010"
+    }
+  },
+  "shape": {
+    "corner_scale": 1.25
+  },
+  "icons": {
+    "style": "rounded",
+    "files": {}
+  },
+  "decor": {
+    "background": {
+      "light": "bg_light.webp",
+      "dark": "bg_dark.webp"
+    },
+    "header": {
+      "light": "header_light.webp",
+      "dark": "header_dark.webp"
+    },
+    "empty": "empty.webp",
+    "chat_background": {
+      "light": "chat_light.webp",
+      "dark": "chat_dark.webp"
+    }
+  },
+  "assets": [
+    {
+      "path": "bg_dark.webp",
+      "sha256": "ff2033c4d36770af5686931e1c31bc072bb0e6a166ad119bc2364dff361816c0",
+      "size": 20518,
+      "type": "image/webp"
+    },
+    {
+      "path": "bg_light.webp",
+      "sha256": "bb9253207d021d882bbc34ce645a5e73fa6dde909e3a7838069baab07b327668",
+      "size": 22336,
+      "type": "image/webp"
+    },
+    {
+      "path": "chat_dark.webp",
+      "sha256": "f59e2ec77f3f209f19172cd60f6c705641b166c6994c3aaecbe453fb99b38ce9",
+      "size": 41616,
+      "type": "image/webp"
+    },
+    {
+      "path": "chat_light.webp",
+      "sha256": "dafde5fa6e257ed8c3dbc1571bd85b786585fd06ba50504460463611890614f5",
+      "size": 40698,
+      "type": "image/webp"
+    },
+    {
+      "path": "empty.webp",
+      "sha256": "148d1147dc6a3556551588c1559e887ca3a5534ec701b4ccd96ab77b06aa1525",
+      "size": 16524,
+      "type": "image/webp"
+    },
+    {
+      "path": "header_dark.webp",
+      "sha256": "7dd76e14d74e8f1c7e3a2f95e0595f450cfd1acdcc1c635ce21e570a1c644d4f",
+      "size": 18900,
+      "type": "image/webp"
+    },
+    {
+      "path": "header_light.webp",
+      "sha256": "1dca6265630e284443c89c94c2893a8b62ca6d5bfc1e1238f09b3c82710447d9",
+      "size": 22612,
+      "type": "image/webp"
+    }
+  ]
+}

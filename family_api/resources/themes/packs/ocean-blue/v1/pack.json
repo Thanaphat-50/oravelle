@@ -1,0 +1,107 @@
+{
+  "format": 1,
+  "slug": "ocean-blue",
+  "version": 1,
+  "name": "Ocean Blue",
+  "min_app_build": 1,
+  "modes": {
+    "light": {
+      "primary": "#1F7AE0",
+      "primary_dark": "#155DB0",
+      "secondary": "#10B6C9",
+      "background": "#F3F8FD",
+      "surface": "#FFFFFF",
+      "fill": "#EEF4FA",
+      "border": "#DCE8F5",
+      "soft_primary": "#E6F1FD",
+      "soft_secondary": "#E2F7FA",
+      "text": "#0B2540",
+      "text_muted": "#5B7188",
+      "text_subtle": "#2B4560",
+      "market": "#0E86A0",
+      "shadow": "#140B2540"
+    },
+    "dark": {
+      "primary": "#5AA9FF",
+      "primary_dark": "#3D8FEA",
+      "secondary": "#38C5D9",
+      "background": "#0A1622",
+      "surface": "#10202F",
+      "fill": "#172A3C",
+      "border": "#213547",
+      "soft_primary": "#13304D",
+      "soft_secondary": "#0F3340",
+      "text": "#EAF3FC",
+      "text_muted": "#8FA6BD",
+      "text_subtle": "#C5D6E6",
+      "market": "#38C5D9",
+      "on_primary": "#06182A"
+    }
+  },
+  "shape": {
+    "corner_scale": 1.0
+  },
+  "icons": {
+    "style": "outlined",
+    "files": {}
+  },
+  "decor": {
+    "background": {
+      "light": "bg_light.webp",
+      "dark": "bg_dark.webp"
+    },
+    "header": {
+      "light": "header_light.webp",
+      "dark": "header_dark.webp"
+    },
+    "empty": "empty.webp",
+    "chat_background": {
+      "light": "chat_light.webp",
+      "dark": "chat_dark.webp"
+    }
+  },
+  "assets": [
+    {
+      "path": "bg_dark.webp",
+      "sha256": "57e5bc821ee2f5e951eaf938b3b7c584e61884ee1bd6ad6da882efa20d3dccb0",
+      "size": 4190,
+      "type": "image/webp"
+    },
+    {
+      "path": "bg_light.webp",
+      "sha256": "e2767f2f0ec84ccfb9565ce1d0445ec618a1e54bdb40cf180f46482a3e6050f7",
+      "size": 4296,
+      "type": "image/webp"
+    },
+    {
+      "path": "chat_dark.webp",
+      "sha256": "69215b38702d128a4a04480cafb0685b828e6fe75268013757f21a14e75bb49b",
+      "size": 60478,
+      "type": "image/webp"
+    },
+    {
+      "path": "chat_light.webp",
+      "sha256": "e59b886d36d6bfa8da5905bc7ad33c249cfad7594e2b2da732c1381ab1d239b7",
+      "size": 32912,
+      "type": "image/webp"
+    },
+    {
+      "path": "empty.webp",
+      "sha256": "9b8c15f0e198d91ab5ebc933e34c43d986419880e2185d1ecb18be6c120b6f2e",
+      "size": 10766,
+      "type": "image/webp"
+    },
+    {
+      "path": "header_dark.webp",
+      "sha256": "972653ef091134aaf773598b86031055a35d3360c1017d6bb54e4f3cee388a46",
+      "size": 12580,
+      "type": "image/webp"
+    },
+    {
+      "path": "header_light.webp",
+      "sha256": "c7c6fe9bb18c330524e6b6367ab54b08bed08d200ca8f567432e570c478d5136",
+      "size": 10678,
+      "type": "image/webp"
+    }
+  ]
+}

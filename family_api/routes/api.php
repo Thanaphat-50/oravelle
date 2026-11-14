@@ -2,6 +2,8 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\GooglePlayWebhookController;
+use App\Http\Controllers\ThemeController;
 use App\Http\Controllers\AccountDeletionRequestController;
 use App\Http\Controllers\AddressController;
 use App\Http\Controllers\CartController;
@@ -894,7 +896,35 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/support/tickets/{ticket}/messages', [SupportTicketController::class, 'storeMessage'])
         ->whereNumber('ticket')
         ->middleware('throttle:support-message');
+
+    // ร้านธีม / ธีมของฉัน / ชุดไฟล์ธีม / ตรวจการซื้อ (docs/themes.md)
+    Route::get('/themes', [ThemeController::class, 'index']);
+    Route::get('/themes/mine', [ThemeController::class, 'mine']);
+    Route::get('/themes/{theme:slug}/pack', [ThemeController::class, 'pack']);
+    Route::post('/themes/{theme:slug}/purchases', [ThemeController::class, 'verifyPurchase'])
+        ->middleware('throttle:theme-purchase');
+    Route::post('/themes/purchases/restore', [ThemeController::class, 'restore'])
+        ->middleware('throttle:theme-purchase');
+    Route::post('/themes/{theme:slug}/test-purchase', [ThemeController::class, 'testPurchase'])
+        ->middleware('throttle:theme-purchase');
 });
+
+// ไฟล์ในชุดธีม: ลิงก์ชั่วคราวที่ลงลายเซ็น (ออกให้จาก /themes/{slug}/pack)
+Route::get('/theme-files/{version}/{path}', [ThemeController::class, 'file'])
+    ->where('path', '[a-z0-9_\-\/]+\.(png|webp|jpg)')
+    ->whereNumber('version')
+    ->middleware(['signed', 'throttle:240,1'])
+    ->name('themes.file');
+
+// ภาพตัวอย่างธีมในร้าน (ไม่ต้องมีสิทธิ์)
+Route::get('/theme-previews/{slug}/{name}', [ThemeController::class, 'preview'])
+    ->where(['slug' => '[a-z0-9\-]+', 'name' => '[a-z]+'])
+    ->middleware('throttle:240,1')
+    ->name('themes.preview');
+
+// Google Play Real-time developer notifications (Pub/Sub push) — token ในลิงก์ = GOOGLE_PLAY_RTDN_TOKEN
+Route::post('/billing/google/rtdn/{token}', [GooglePlayWebhookController::class, 'rtdn'])
+    ->middleware('throttle:120,1');
 
 // รูปในแชทกลุ่ม: ลิงก์ชั่วคราวที่ลงลายเซ็น ผูกกับผู้ดู + ตรวจสิทธิ์ผู้ดูซ้ำทุกครั้ง
 Route::get('/group-chat-images/{message}', [GroupChatController::class, 'image'])
