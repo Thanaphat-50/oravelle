@@ -9,7 +9,6 @@ import 'package:share_plus/share_plus.dart';
 import '../config/app_info.dart';
 import '../services/auth_service.dart';
 import '../services/background_location.dart';
-import '../data/market_data.dart' show marketColor;
 import '../services/cart_service.dart';
 import '../services/call_coordinator.dart';
 import '../services/chat_service.dart';
@@ -20,6 +19,9 @@ import '../services/profile_service.dart';
 import '../services/push_service.dart';
 import '../services/settings_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_theming.dart';
+import '../theme/theme_spec.dart';
+import '../theme/themed_widgets.dart';
 import '../widgets/account_drawer.dart';
 import '../widgets/family_invitation_cards.dart';
 import '../widgets/post_categories.dart';
@@ -1702,7 +1704,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           icon: Stack(
             clipBehavior: Clip.none,
             children: [
-              const Icon(Icons.chat_bubble_outline_rounded, size: 24),
+              const ThemedIcon(ThemeSlot.chat, size: 24),
               if (unread > 0)
                 Positioned(
                   right: -6,
@@ -1753,7 +1755,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         clipBehavior: Clip.none,
 
         children: [
-          const Icon(Icons.notifications_none_rounded, size: 26),
+          const ThemedIcon(ThemeSlot.bell, size: 26),
 
           if (unreadNotificationCount > 0)
             Positioned(
@@ -1939,19 +1941,34 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       ),
 
       // แถบด้านบนอยู่ในเนื้อหา เพื่อเลื่อนหายได้ในหน้าวิดีโอ
-      body: Column(
+      // พื้นหลัง/ภาพหัวของธีมอยู่ชั้นล่างสุด (ไม่รับการแตะ ไม่บังเนื้อหา)
+      body: Stack(
         children: [
-          buildCollapsible(visible: !immersive, child: buildAppBar()),
-          Expanded(
-            // แถบด้านบนจัดระยะใต้แถบสถานะไว้แล้ว (เหมือน Scaffold.appBar)
-            child: MediaQuery.removePadding(
-              context: context,
-              removeTop: true,
-              child: NotificationListener<UserScrollNotification>(
-                onNotification: handleUserScroll,
-                child: getCurrentPage(),
-              ),
+          if (!immersive) ...[
+            const Positioned.fill(child: ThemeBackdrop()),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: MediaQuery.paddingOf(context).top + 150,
+              child: const ThemeHeaderArt(),
             ),
+          ],
+          Column(
+            children: [
+              buildCollapsible(visible: !immersive, child: buildAppBar()),
+              Expanded(
+                // แถบด้านบนจัดระยะใต้แถบสถานะไว้แล้ว (เหมือน Scaffold.appBar)
+                child: MediaQuery.removePadding(
+                  context: context,
+                  removeTop: true,
+                  child: NotificationListener<UserScrollNotification>(
+                    onNotification: handleUserScroll,
+                    child: getCurrentPage(),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1961,8 +1978,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   AppBar buildAppBar() {
+    final ThemeDecor decor = AppTheming.decor;
+
+    final bool themedTop =
+        decor.background(AppColors.isDark) != null ||
+        decor.header(AppColors.isDark) != null;
+
     return AppBar(
       toolbarHeight: 64,
+
+      // ธีมมีพื้นหลัง/ภาพหัว → แถบโปร่ง ให้เห็นภาพของธีม
+      backgroundColor: themedTop ? Colors.transparent : null,
 
       // มุมซ้ายบน: รูปโปรไฟล์ → เมนูบัญชี
       leadingWidth: 64,
@@ -2020,7 +2046,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               icon: Badge(
                 isLabelVisible: count > 0,
                 label: Text(count > 99 ? '99+' : '$count'),
-                backgroundColor: marketColor,
+                backgroundColor: AppColors.market,
                 child: const Icon(Icons.shopping_cart_outlined, size: 25),
               ),
             ),
@@ -2034,7 +2060,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SearchPage()),
             ),
-            icon: const Icon(Icons.search_rounded, size: 26),
+            icon: const ThemedIcon(ThemeSlot.search, size: 26),
           ),
 
         // แชทใช้ได้เมื่อมีครอบครัวแล้ว
@@ -2052,16 +2078,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   // แถบล่างแบบลอย โค้งมน
   // =====================================================
 
+  // ไอคอนตามธีม (ThemedIcon) ความหมายเดิมทุกธีม
   static const List<_NavItem> navItems = [
-    _NavItem(Icons.home_outlined, Icons.home_rounded, 'หน้าหลัก'),
-    _NavItem(
-      Icons.shopping_basket_outlined,
-      Icons.shopping_basket_rounded,
-      'ร้านค้า',
-    ),
-    _NavItem(Icons.groups_outlined, Icons.groups_rounded, 'กลุ่มสมาชิก'),
-    _NavItem(Icons.location_on_outlined, Icons.location_on_rounded, 'ตำแหน่ง'),
-    _NavItem(Icons.event_note_outlined, Icons.event_note_rounded, 'กิจกรรม'),
+    _NavItem(ThemeSlot.home, 'หน้าหลัก'),
+    _NavItem(ThemeSlot.shop, 'ร้านค้า'),
+    _NavItem(ThemeSlot.group, 'กลุ่มสมาชิก'),
+    _NavItem(ThemeSlot.map, 'ตำแหน่ง'),
+    _NavItem(ThemeSlot.activity, 'กิจกรรม'),
   ];
 
   void selectTab(int index) {
@@ -2151,8 +2174,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(99),
               ),
-              child: Icon(
-                selected ? item.selectedIcon : item.icon,
+              child: ThemedIcon(
+                item.slot,
+                selected: selected,
                 size: 23,
                 color: selected ? AppColors.primary : AppColors.muted,
               ),
@@ -3404,9 +3428,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 }
 
 class _NavItem {
-  final IconData icon;
-  final IconData selectedIcon;
+  final ThemeSlot slot;
   final String label;
 
-  const _NavItem(this.icon, this.selectedIcon, this.label);
+  const _NavItem(this.slot, this.label);
 }

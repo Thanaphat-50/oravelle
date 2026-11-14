@@ -230,8 +230,8 @@ class _FeaturedShopCard extends StatelessWidget {
             colors: [AppColors.softWarm, AppColors.softWarm],
           ),
         ),
-        child: const Center(
-          child: Icon(Icons.storefront_rounded, color: marketColor, size: 46),
+        child: Center(
+          child: Icon(Icons.storefront_rounded, color: AppColors.market, size: 46),
         ),
       );
     }

@@ -6,7 +6,8 @@ import 'package:flutter/services.dart';
 // ชุดสีของแอป (โหมดสว่าง / โหมดมืด)
 //
 // ทุกหน้าใช้สีผ่าน AppColors ซึ่งอ่านจากชุดสีปัจจุบัน
-// สลับโหมดแล้ว main.dart สั่งให้ทุกหน้าวาดใหม่ด้วยชุดสีใหม่
+// ชุดสีมาจากธีมที่ใช้อยู่ (theme/app_theming.dart) — ธีมเริ่มต้นคือ Lavender
+// สลับโหมด/ธีมแล้ว main.dart สั่งให้ทุกหน้าวาดใหม่ด้วยชุดสีใหม่ (ไม่ล้างสถานะหน้า)
 // =======================================================
 
 class AppPalette {
@@ -48,6 +49,12 @@ class AppPalette {
   // เงาของการ์ด
   final Color shadow;
 
+  // ตัวหนังสือ/ไอคอนบนพื้นสีหลัก (ปุ่มทึบ, FAB)
+  final Color onPrimary;
+
+  // สีเน้นของร้านค้า (ราคาในหน้าจัดการร้าน ป้าย ไอคอนร้าน)
+  final Color market;
+
   const AppPalette({
     required this.brightness,
     required this.navy,
@@ -68,7 +75,56 @@ class AppPalette {
     required this.softWarm,
     required this.softDanger,
     required this.shadow,
+    this.onPrimary = const Color(0xFFFFFFFF),
+    this.market = const Color(0xFFD9701F),
   });
+
+  // อ่านค่าสีจากไฟล์ธีม (ข้อมูลล้วน) — ช่องที่ไม่มี/ผิดรูปแบบใช้ค่าของ fallback
+  // รูปแบบสี: "#RRGGBB" หรือ "#AARRGGBB"
+  factory AppPalette.fromTokens(
+    Map<String, dynamic> tokens, {
+    required AppPalette fallback,
+  }) {
+    Color pick(String key, Color base) => parseColor(tokens[key]) ?? base;
+
+    return AppPalette(
+      brightness: fallback.brightness,
+      navy: pick('text', fallback.navy),
+      muted: pick('text_muted', fallback.muted),
+      subtle: pick('text_subtle', fallback.subtle),
+      primary: pick('primary', fallback.primary),
+      primaryDark: pick('primary_dark', fallback.primaryDark),
+      sky: pick('secondary', fallback.sky),
+      warm: pick('warning', fallback.warm),
+      danger: pick('danger', fallback.danger),
+      success: pick('success', fallback.success),
+      background: pick('background', fallback.background),
+      surface: pick('surface', fallback.surface),
+      fill: pick('fill', fallback.fill),
+      border: pick('border', fallback.border),
+      softPrimary: pick('soft_primary', fallback.softPrimary),
+      softSky: pick('soft_secondary', fallback.softSky),
+      softWarm: pick('soft_warning', fallback.softWarm),
+      softDanger: pick('soft_danger', fallback.softDanger),
+      shadow: pick('shadow', fallback.shadow),
+      onPrimary: pick('on_primary', fallback.onPrimary),
+      market: pick('market', fallback.market),
+    );
+  }
+
+  static Color? parseColor(dynamic value) {
+    if (value is! String) return null;
+
+    final String hex = value.trim().replaceFirst('#', '');
+
+    if (!RegExp(r'^([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$').hasMatch(hex)) {
+      return null;
+    }
+
+    final int raw = int.parse(hex, radix: 16);
+
+    return Color(hex.length == 6 ? 0xFF000000 | raw : raw);
+  }
 
   static const AppPalette light = AppPalette(
     brightness: Brightness.light,
@@ -90,6 +146,7 @@ class AppPalette {
     softWarm: Color(0xFFFFF4E8),
     softDanger: Color(0xFFFFEEEE),
     shadow: Color(0x14101828),
+    market: Color(0xFFD9701F),
   );
 
   static const AppPalette dark = AppPalette(
@@ -112,6 +169,7 @@ class AppPalette {
     softWarm: Color(0xFF3A2A18),
     softDanger: Color(0xFF3D1F20),
     shadow: Color(0x66000000),
+    market: Color(0xFFE8893A),
   );
 }
 
@@ -139,6 +197,22 @@ class AppColors {
   static Color get softWarm => palette.softWarm;
   static Color get softDanger => palette.softDanger;
   static Color get shadow => palette.shadow;
+  static Color get onPrimary => palette.onPrimary;
+  static Color get market => palette.market;
+}
+
+// =======================================================
+// ความโค้งของมุมตามธีม (1 = Lavender)
+// ใช้ AppShapes.r(ค่าเดิม) แทนตัวเลขตรง ๆ ในส่วนประกอบร่วม
+// =======================================================
+
+class AppShapes {
+  static double scale = 1;
+
+  static double r(double radius) => radius * scale;
+
+  static BorderRadius circular(double radius) =>
+      BorderRadius.circular(r(radius));
 }
 
 // =======================================================
@@ -163,7 +237,7 @@ class AppDecorations {
   static BoxDecoration card({double radius = 22, Color? color}) {
     return BoxDecoration(
       color: color ?? AppColors.surface,
-      borderRadius: BorderRadius.circular(radius),
+      borderRadius: AppShapes.circular(radius),
       border: cardBorder,
       boxShadow: cardShadow,
     );
@@ -184,7 +258,7 @@ class AppTheme {
           brightness: p.brightness,
         ).copyWith(
           primary: p.primary,
-          onPrimary: Colors.white,
+          onPrimary: p.onPrimary,
           secondary: p.sky,
           surface: p.surface,
           onSurface: p.navy,
@@ -194,7 +268,7 @@ class AppTheme {
 
     OutlineInputBorder inputBorder(Color color, [double width = 1]) {
       return OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppShapes.circular(16),
         borderSide: BorderSide(color: color, width: width),
       );
     }
@@ -305,26 +379,22 @@ class AppTheme {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: p.primary,
-          foregroundColor: Colors.white,
+          foregroundColor: p.onPrimary,
           disabledBackgroundColor: p.primary.withValues(alpha: 0.35),
           disabledForegroundColor: Colors.white70,
           elevation: 0,
           minimumSize: const Size(double.infinity, 54),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: AppShapes.circular(16)),
           textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: p.primary,
-          foregroundColor: Colors.white,
+          foregroundColor: p.onPrimary,
           elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: AppShapes.circular(14)),
           textStyle: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
@@ -333,9 +403,7 @@ class AppTheme {
           foregroundColor: p.primary,
           minimumSize: const Size(double.infinity, 52),
           side: BorderSide(color: p.border),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: AppShapes.circular(16)),
           textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         ),
       ),
@@ -354,7 +422,7 @@ class AppTheme {
         color: p.surface,
         surfaceTintColor: Colors.transparent,
         margin: const EdgeInsets.symmetric(vertical: 6),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        shape: RoundedRectangleBorder(borderRadius: AppShapes.circular(22)),
       ),
 
       listTileTheme: ListTileThemeData(iconColor: p.muted, textColor: p.navy),
@@ -396,18 +464,16 @@ class AppTheme {
 
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: p.primary,
-        foregroundColor: Colors.white,
+        foregroundColor: p.onPrimary,
         elevation: 4,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(18)),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: AppShapes.circular(18)),
       ),
 
       dialogTheme: DialogThemeData(
         backgroundColor: p.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 8,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        shape: RoundedRectangleBorder(borderRadius: AppShapes.circular(28)),
         titleTextStyle: TextStyle(
           color: p.navy,
           fontSize: 19,
@@ -425,8 +491,10 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         showDragHandle: false,
         dragHandleColor: p.border,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppShapes.r(28)),
+          ),
         ),
       ),
 
@@ -452,17 +520,17 @@ class AppTheme {
           fontSize: 13.5,
           fontWeight: FontWeight.w500,
         ),
-        actionTextColor: const Color(0xFFB4B7FF),
+        actionTextColor: Color.lerp(p.primary, Colors.white, 0.55),
         elevation: 5,
         insetPadding: const EdgeInsets.all(14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: AppShapes.circular(16)),
       ),
 
       popupMenuTheme: PopupMenuThemeData(
         color: p.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 6,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        shape: RoundedRectangleBorder(borderRadius: AppShapes.circular(18)),
         textStyle: TextStyle(
           color: p.navy,
           fontSize: 13.5,
@@ -473,9 +541,9 @@ class AppTheme {
       datePickerTheme: DatePickerThemeData(
         backgroundColor: p.surface,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        shape: RoundedRectangleBorder(borderRadius: AppShapes.circular(28)),
         headerBackgroundColor: p.primary,
-        headerForegroundColor: Colors.white,
+        headerForegroundColor: p.onPrimary,
       ),
 
       timePickerTheme: TimePickerThemeData(backgroundColor: p.surface),

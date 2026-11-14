@@ -162,11 +162,11 @@ class _MarketShopPageState extends State<MarketShopPage> {
             children: [
               CircleAvatar(
                 radius: 32,
-                backgroundColor: marketColor.withValues(alpha: 0.10),
+                backgroundColor: AppColors.market.withValues(alpha: 0.10),
                 foregroundImage: logoUrl != null ? NetworkImage(logoUrl) : null,
-                child: const Icon(
+                child: Icon(
                   Icons.storefront_rounded,
-                  color: marketColor,
+                  color: AppColors.market,
                   size: 28,
                 ),
               ),

@@ -394,7 +394,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ),
             actions: [
               FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: marketColor),
+                style: FilledButton.styleFrom(backgroundColor: AppColors.market),
                 onPressed: () => Navigator.of(dialogContext).pop(),
                 child: const Text('ตรวจสอบอีกครั้ง'),
               ),
@@ -493,7 +493,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    style: FilledButton.styleFrom(backgroundColor: marketColor),
+                    style: FilledButton.styleFrom(backgroundColor: AppColors.market),
                     onPressed: addAddress,
                     icon: const Icon(Icons.add_location_alt_outlined),
                     label: const Text('เพิ่มที่อยู่จัดส่ง'),
@@ -506,7 +506,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               onTap: chooseAddress,
               child: Row(
                 children: [
-                  const Icon(Icons.location_on_rounded, color: marketColor),
+                  Icon(Icons.location_on_rounded, color: AppColors.market),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -532,7 +532,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right_rounded, color: marketColor),
+                  Icon(Icons.chevron_right_rounded, color: AppColors.market),
                 ],
               ),
             ),
@@ -612,8 +612,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       Expanded(
                         child: Text(
                           formatPrice(line['unit_price']),
-                          style: const TextStyle(
-                            color: marketColor,
+                          style: TextStyle(
+                            color: AppColors.market,
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
                           ),
@@ -645,9 +645,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         onPressed: isRefreshing || quantity >= max
                             ? null
                             : () => changeQuantity(line, quantity + 1),
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.add_circle_outline_rounded,
-                          color: marketColor,
+                          color: AppColors.market,
                         ),
                       ),
                     ],
@@ -671,7 +671,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
         color: selected
-            ? marketColor.withValues(alpha: 0.08)
+            ? AppColors.market.withValues(alpha: 0.08)
             : AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
@@ -682,13 +682,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: selected ? marketColor : AppColors.border,
+                color: selected ? AppColors.market : AppColors.border,
                 width: selected ? 1.6 : 1,
               ),
             ),
             child: Row(
               children: [
-                Icon(icon, color: selected ? marketColor : AppColors.muted),
+                Icon(icon, color: selected ? AppColors.market : AppColors.muted),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -717,7 +717,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   selected
                       ? Icons.radio_button_checked_rounded
                       : Icons.radio_button_off_rounded,
-                  color: selected ? marketColor : AppColors.muted,
+                  color: selected ? AppColors.market : AppColors.muted,
                 ),
               ],
             ),
@@ -739,7 +739,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         children: [
           Row(
             children: [
-              const Icon(Icons.storefront_rounded, color: marketColor),
+              Icon(Icons.storefront_rounded, color: AppColors.market),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -861,7 +861,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             Text(
               value,
               style: TextStyle(
-                color: bold ? marketColor : AppColors.navy,
+                color: bold ? AppColors.market : AppColors.navy,
                 fontSize: bold ? 19 : 13.5,
                 fontWeight: FontWeight.w800,
               ),
@@ -939,9 +939,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.shield_outlined,
-                            color: marketColor,
+                            color: AppColors.market,
                             size: 20,
                           ),
                           const SizedBox(width: 10),
@@ -981,7 +981,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 ),
                 child: FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: marketColor,
+                    backgroundColor: AppColors.market,
                     minimumSize: const Size(double.infinity, 54),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),

@@ -4,7 +4,6 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../data/market_data.dart';
 import '../services/api_helper.dart';
 import '../services/support_service.dart';
 import '../theme/app_theme.dart';
@@ -338,7 +337,7 @@ class _SupportTicketFormPageState extends State<SupportTicketFormPage> {
                 if (order != null)
                   SupportNote(
                     icon: Icons.receipt_long_rounded,
-                    color: marketColor,
+                    color: AppColors.market,
                     text:
                         'แจ้งเรื่องคำสั่งซื้อ ${order['code']} (แนบให้อัตโนมัติ)\n'
                         'การแจ้งปัญหาไม่เปลี่ยนสถานะคำสั่งซื้อหรือการคืนเงิน '

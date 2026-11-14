@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../data/market_data.dart' show marketColor;
 import '../services/chat_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/chat_media.dart' show chatDuration;
@@ -624,15 +623,15 @@ class _ChatListPageState extends State<ChatListPage> {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: marketColor.withValues(alpha: 0.12),
+                              color: AppColors.market.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(99),
                             ),
                             child: Text(
                               tag,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: marketColor,
+                              style: TextStyle(
+                                color: AppColors.market,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
                               ),

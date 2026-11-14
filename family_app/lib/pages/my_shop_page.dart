@@ -350,11 +350,11 @@ class _MyShopPageState extends State<MyShopPage> {
         children: [
           CircleAvatar(
             radius: 34,
-            backgroundColor: marketColor.withValues(alpha: 0.10),
+            backgroundColor: AppColors.market.withValues(alpha: 0.10),
             foregroundImage: logoUrl != null ? NetworkImage(logoUrl) : null,
-            child: const Icon(
+            child: Icon(
               Icons.storefront_rounded,
-              color: marketColor,
+              color: AppColors.market,
               size: 30,
             ),
           ),
@@ -533,9 +533,9 @@ class _MyShopPageState extends State<MyShopPage> {
           decoration: cardDecoration(),
           child: Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.receipt_long_rounded,
-                color: marketColor,
+                color: AppColors.market,
                 size: 28,
               ),
               const SizedBox(width: 12),
@@ -585,7 +585,7 @@ class _MyShopPageState extends State<MyShopPage> {
                     ),
                   ),
                 ),
-              const Icon(Icons.chevron_right_rounded, color: marketColor),
+              Icon(Icons.chevron_right_rounded, color: AppColors.market),
             ],
           ),
         ),
@@ -608,7 +608,7 @@ class _MyShopPageState extends State<MyShopPage> {
           decoration: cardDecoration(),
           child: Row(
             children: [
-              const Icon(Icons.bar_chart_rounded, color: marketColor, size: 28),
+              Icon(Icons.bar_chart_rounded, color: AppColors.market, size: 28),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -630,7 +630,7 @@ class _MyShopPageState extends State<MyShopPage> {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded, color: marketColor),
+              Icon(Icons.chevron_right_rounded, color: AppColors.market),
             ],
           ),
         ),
@@ -724,7 +724,7 @@ class _MyShopPageState extends State<MyShopPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: marketColor),
+          Icon(icon, size: 20, color: AppColors.market),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -768,7 +768,7 @@ class _MyShopPageState extends State<MyShopPage> {
           if (canAdd)
             FilledButton.icon(
               style: FilledButton.styleFrom(
-                backgroundColor: marketColor,
+                backgroundColor: AppColors.market,
                 minimumSize: const Size(0, 40),
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 shape: RoundedRectangleBorder(
@@ -801,7 +801,7 @@ class _MyShopPageState extends State<MyShopPage> {
           decoration: cardDecoration(),
           child: Column(
             children: [
-              Icon(Icons.inventory_2_outlined, color: marketColor, size: 34),
+              Icon(Icons.inventory_2_outlined, color: AppColors.market, size: 34),
               SizedBox(height: 10),
               Text(
                 'ยังไม่มีสินค้า',
@@ -894,8 +894,8 @@ class _MyShopPageState extends State<MyShopPage> {
                           children: [
                             TextSpan(
                               text: formatPrice(product['price']),
-                              style: const TextStyle(
-                                color: marketColor,
+                              style: TextStyle(
+                                color: AppColors.market,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -1033,12 +1033,12 @@ class _MyShopPageState extends State<MyShopPage> {
             width: 84,
             height: 84,
             decoration: BoxDecoration(
-              color: marketColor.withValues(alpha: 0.10),
+              color: AppColors.market.withValues(alpha: 0.10),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
+            child: Icon(
               Icons.storefront_rounded,
-              color: marketColor,
+              color: AppColors.market,
               size: 40,
             ),
           ),
@@ -1074,7 +1074,7 @@ class _MyShopPageState extends State<MyShopPage> {
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   child: Row(
                     children: [
-                      Icon(icon, color: marketColor, size: 22),
+                      Icon(icon, color: AppColors.market, size: 22),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
@@ -1095,7 +1095,7 @@ class _MyShopPageState extends State<MyShopPage> {
         const SizedBox(height: 24),
         FilledButton.icon(
           style: FilledButton.styleFrom(
-            backgroundColor: marketColor,
+            backgroundColor: AppColors.market,
             minimumSize: const Size(double.infinity, 54),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18),
@@ -1188,9 +1188,9 @@ class _MyShopPageState extends State<MyShopPage> {
                     const SizedBox(height: 20),
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: marketColor,
+                        foregroundColor: AppColors.market,
                         minimumSize: const Size(double.infinity, 52),
-                        side: const BorderSide(color: marketColor),
+                        side: BorderSide(color: AppColors.market),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(18),
                         ),

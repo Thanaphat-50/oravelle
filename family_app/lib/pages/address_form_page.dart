@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../data/market_data.dart';
 import '../services/cart_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/market_sheets.dart';
@@ -242,7 +241,7 @@ class _AddressFormPageState extends State<AddressFormPage> {
               SwitchListTile(
                 value: isDefault,
                 onChanged: (value) => setState(() => isDefault = value),
-                activeThumbColor: marketColor,
+                activeThumbColor: AppColors.market,
                 contentPadding: EdgeInsets.zero,
                 title: Text(
                   'ตั้งเป็นที่อยู่หลัก',
@@ -255,7 +254,7 @@ class _AddressFormPageState extends State<AddressFormPage> {
               const SizedBox(height: 12),
               FilledButton(
                 style: FilledButton.styleFrom(
-                  backgroundColor: marketColor,
+                  backgroundColor: AppColors.market,
                   minimumSize: const Size(double.infinity, 54),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),

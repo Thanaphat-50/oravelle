@@ -424,7 +424,7 @@ class _ShopFormPageState extends State<ShopFormPage> {
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: AppColors.border),
               ),
-              child: const Icon(Icons.add_a_photo_outlined, color: marketColor),
+              child: Icon(Icons.add_a_photo_outlined, color: AppColors.market),
             ),
           ),
       ],
@@ -451,16 +451,16 @@ class _ShopFormPageState extends State<ShopFormPage> {
                 width: 96,
                 height: 96,
                 decoration: BoxDecoration(
-                  color: marketColor.withValues(alpha: 0.10),
+                  color: AppColors.market.withValues(alpha: 0.10),
                   shape: BoxShape.circle,
                   image: image != null
                       ? DecorationImage(image: image, fit: BoxFit.cover)
                       : null,
                 ),
                 child: image == null
-                    ? const Icon(
+                    ? Icon(
                         Icons.storefront_rounded,
-                        color: marketColor,
+                        color: AppColors.market,
                         size: 40,
                       )
                     : null,
@@ -472,7 +472,7 @@ class _ShopFormPageState extends State<ShopFormPage> {
                   width: 34,
                   height: 34,
                   decoration: BoxDecoration(
-                    color: marketColor,
+                    color: AppColors.market,
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 3),
                   ),
@@ -532,7 +532,7 @@ class _ShopFormPageState extends State<ShopFormPage> {
               CategoryChoiceChip(
                 label: item.label,
                 icon: item.icon,
-                color: marketColor,
+                color: AppColors.market,
                 selected: category == item.key,
                 onTap: () {
                   setState(() {
@@ -621,10 +621,10 @@ class _ShopFormPageState extends State<ShopFormPage> {
                       }
                     });
                   },
-            activeColor: marketColor,
+            activeColor: AppColors.market,
             contentPadding: EdgeInsets.zero,
             controlAffinity: ListTileControlAffinity.leading,
-            secondary: Icon(method.icon, color: marketColor),
+            secondary: Icon(method.icon, color: AppColors.market),
             title: Text(
               method.label,
               style: TextStyle(
@@ -742,14 +742,14 @@ class _ShopFormPageState extends State<ShopFormPage> {
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 4, 12, 4),
       decoration: BoxDecoration(
-        color: marketColor.withValues(alpha: 0.06),
+        color: AppColors.market.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
           Checkbox(
             value: acceptedRules,
-            activeColor: marketColor,
+            activeColor: AppColors.market,
             onChanged: isSaving
                 ? null
                 : (value) {
@@ -768,7 +768,7 @@ class _ShopFormPageState extends State<ShopFormPage> {
             ),
           ),
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: marketColor),
+            style: TextButton.styleFrom(foregroundColor: AppColors.market),
             onPressed: () {
               dismissKeyboard();
 
@@ -985,7 +985,7 @@ class _ShopFormPageState extends State<ShopFormPage> {
               const SizedBox(height: 24),
               FilledButton.icon(
                 style: FilledButton.styleFrom(
-                  backgroundColor: marketColor,
+                  backgroundColor: AppColors.market,
                   minimumSize: const Size(double.infinity, 54),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),

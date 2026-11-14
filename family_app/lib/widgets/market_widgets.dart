@@ -31,7 +31,7 @@ class MarketProductCard extends StatelessWidget {
     if (imageUrl == null) {
       return ColoredBox(
         color: AppColors.fill,
-        child: Icon(Icons.shopping_bag_outlined, color: marketColor),
+        child: Icon(Icons.shopping_bag_outlined, color: AppColors.market),
       );
     }
 
@@ -405,7 +405,7 @@ class ShopContactButtons extends StatelessWidget {
           Expanded(
             child: FilledButton.icon(
               style: FilledButton.styleFrom(
-                backgroundColor: marketColor,
+                backgroundColor: AppColors.market,
                 minimumSize: const Size(0, 50),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -466,7 +466,7 @@ class MarketSafetyNote extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.shield_outlined, color: marketColor, size: 20),
+          Icon(Icons.shield_outlined, color: AppColors.market, size: 20),
           SizedBox(width: 10),
           Expanded(
             child: Text(

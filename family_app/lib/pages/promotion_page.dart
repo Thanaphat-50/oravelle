@@ -338,7 +338,7 @@ class _PromotionPageState extends State<PromotionPage> {
                 ? createOrder
                 : null,
             style: FilledButton.styleFrom(
-              backgroundColor: marketColor,
+              backgroundColor: AppColors.market,
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
             icon: isWorking
@@ -371,7 +371,7 @@ class _PromotionPageState extends State<PromotionPage> {
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
         color: selected
-            ? marketColor.withValues(alpha: 0.08)
+            ? AppColors.market.withValues(alpha: 0.08)
             : AppColors.surface,
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
@@ -382,7 +382,7 @@ class _PromotionPageState extends State<PromotionPage> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: selected ? marketColor : AppColors.border,
+                color: selected ? AppColors.market : AppColors.border,
                 width: selected ? 1.6 : 1,
               ),
             ),
@@ -392,7 +392,7 @@ class _PromotionPageState extends State<PromotionPage> {
                   selected
                       ? Icons.radio_button_checked_rounded
                       : Icons.radio_button_off_rounded,
-                  color: selected ? marketColor : AppColors.muted,
+                  color: selected ? AppColors.market : AppColors.muted,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -420,8 +420,8 @@ class _PromotionPageState extends State<PromotionPage> {
                 ),
                 Text(
                   formatPrice(price),
-                  style: const TextStyle(
-                    color: marketColor,
+                  style: TextStyle(
+                    color: AppColors.market,
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
                   ),
@@ -558,8 +558,8 @@ class _PromotionPageState extends State<PromotionPage> {
           const SizedBox(height: 2),
           Text(
             amount,
-            style: const TextStyle(
-              color: marketColor,
+            style: TextStyle(
+              color: AppColors.market,
               fontSize: 30,
               fontWeight: FontWeight.w800,
             ),
@@ -606,7 +606,7 @@ class _PromotionPageState extends State<PromotionPage> {
             child: FilledButton.icon(
               onPressed: isWorking ? null : attachSlip,
               style: FilledButton.styleFrom(
-                backgroundColor: marketColor,
+                backgroundColor: AppColors.market,
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
               icon: isWorking

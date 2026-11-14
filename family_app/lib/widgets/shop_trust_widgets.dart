@@ -193,10 +193,10 @@ class ShopDetailsCard extends StatelessWidget {
             const SizedBox(height: 10),
             Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.schedule_rounded,
                   size: 19,
-                  color: marketColor,
+                  color: AppColors.market,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -217,7 +217,7 @@ class ShopDetailsCard extends StatelessWidget {
                 for (final dynamic key in methods)
                   if (findDeliveryMethod(key.toString()) case final method?)
                     Chip(
-                      avatar: Icon(method.icon, size: 17, color: marketColor),
+                      avatar: Icon(method.icon, size: 17, color: AppColors.market),
                       label: Text(method.label),
                       visualDensity: VisualDensity.compact,
                     ),
@@ -741,7 +741,7 @@ class _ReviewSheetState extends State<_ReviewSheet> {
               const Spacer(),
               FilledButton(
                 onPressed: rating == 0 || isSaving ? null : save,
-                style: FilledButton.styleFrom(backgroundColor: marketColor),
+                style: FilledButton.styleFrom(backgroundColor: AppColors.market),
                 child: Text(isSaving ? 'กำลังบันทึก...' : 'ส่งรีวิว'),
               ),
             ],

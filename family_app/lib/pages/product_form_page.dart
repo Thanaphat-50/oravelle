@@ -426,24 +426,24 @@ class _ProductFormPageState extends State<ProductFormPage> {
                   width: 92,
                   height: 92,
                   decoration: BoxDecoration(
-                    color: marketColor.withValues(alpha: 0.06),
+                    color: AppColors.market.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: marketColor.withValues(alpha: 0.35),
+                      color: AppColors.market.withValues(alpha: 0.35),
                     ),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.add_photo_alternate_outlined,
-                        color: marketColor,
+                        color: AppColors.market,
                       ),
                       const SizedBox(height: 4),
                       Text(
                         '$imageCount/$maxImages',
-                        style: const TextStyle(
-                          color: marketColor,
+                        style: TextStyle(
+                          color: AppColors.market,
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
@@ -845,7 +845,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
                     CategoryChoiceChip(
                       label: item.label,
                       icon: item.icon,
-                      color: marketColor,
+                      color: AppColors.market,
                       selected: category == item.key,
                       onTap: () {
                         setState(() {
@@ -881,7 +881,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
               const SizedBox(height: 20),
               FilledButton.icon(
                 style: FilledButton.styleFrom(
-                  backgroundColor: marketColor,
+                  backgroundColor: AppColors.market,
                   minimumSize: const Size(double.infinity, 54),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),

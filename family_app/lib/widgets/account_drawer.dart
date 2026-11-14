@@ -1,7 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
-import '../data/market_data.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_theming.dart';
 import 'user_avatar.dart';
 
 // =======================================================
@@ -114,7 +116,19 @@ class _AccountDrawerState extends State<AccountDrawer> {
         4,
         12,
       ),
-      color: AppColors.softPrimary,
+      // ธีมมีภาพหัว → วางใต้ชื่อ (ภาพของธีมออกแบบให้ตัวหนังสืออ่านชัด)
+      decoration: BoxDecoration(
+        color: AppColors.softPrimary,
+        image: switch (AppTheming.decor.header(AppColors.isDark)) {
+          final String path => DecorationImage(
+            image: FileImage(File(path)),
+            fit: BoxFit.cover,
+            alignment: Alignment.topRight,
+            onError: (error, stackTrace) {},
+          ),
+          null => null,
+        },
+      ),
       child: Row(
         children: [
           Expanded(
@@ -328,19 +342,19 @@ class _AccountDrawerState extends State<AccountDrawer> {
                       icon: Icons.receipt_long_outlined,
                       title: 'คำสั่งซื้อของฉัน',
                       subtitle: toPay > 0 ? 'รอชำระเงิน $toPay รายการ' : null,
-                      color: marketColor,
+                      color: AppColors.market,
                     ),
                     buildItem(
                       item: AccountMenuItem.savedProducts,
                       icon: Icons.bookmark_border_rounded,
                       title: 'สินค้าที่บันทึก',
-                      color: marketColor,
+                      color: AppColors.market,
                     ),
                     buildItem(
                       item: AccountMenuItem.addresses,
                       icon: Icons.location_on_outlined,
                       title: 'ที่อยู่จัดส่ง',
-                      color: marketColor,
+                      color: AppColors.market,
                     ),
                   ]),
                   ...buildSection('การขายสินค้า', [
@@ -353,7 +367,7 @@ class _AccountDrawerState extends State<AccountDrawer> {
                           ? 'ร้านค้าของฉัน'
                           : 'เปิดร้านค้า',
                       subtitle: loaded && !hasShop ? 'ลงขายสินค้าในแอป' : null,
-                      color: marketColor,
+                      color: AppColors.market,
                     ),
                   ]),
                   ...buildSection('การตั้งค่า', [

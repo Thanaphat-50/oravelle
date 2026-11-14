@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/activity_service.dart';
 import '../services/api_helper.dart';
 import '../theme/app_theme.dart';
+import '../theme/themed_widgets.dart';
 import '../widgets/activity_reminder_widgets.dart';
 import 'activity_detail_page.dart';
 
@@ -1898,44 +1899,46 @@ class _ActivityPageState extends State<ActivityPage> {
       child: Column(
         children: [
           // ภาพปฏิทิน (วงกลมลาเวนเดอร์ + ปฏิทิน + ป้าย +)
-          SizedBox(
-            width: 124,
-            height: 116,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Container(
-                  width: 112,
-                  height: 112,
-                  decoration: BoxDecoration(
-                    color: AppColors.softPrimary,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                Icon(
-                  Icons.calendar_month_rounded,
-                  color: AppColors.primary,
-                  size: 58,
-                ),
-                Positioned(
-                  right: 10,
-                  bottom: 12,
-                  child: Container(
-                    width: 32,
-                    height: 32,
+          ThemeEmptyArt(
+            fallback: SizedBox(
+              width: 124,
+              height: 116,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 112,
+                    height: 112,
                     decoration: BoxDecoration(
-                      color: AppColors.primary,
+                      color: AppColors.softPrimary,
                       shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.surface, width: 3),
-                    ),
-                    child: const Icon(
-                      Icons.add_rounded,
-                      color: Colors.white,
-                      size: 18,
                     ),
                   ),
-                ),
-              ],
+                  Icon(
+                    Icons.calendar_month_rounded,
+                    color: AppColors.primary,
+                    size: 58,
+                  ),
+                  Positioned(
+                    right: 10,
+                    bottom: 12,
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.surface, width: 3),
+                      ),
+                      child: const Icon(
+                        Icons.add_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
 

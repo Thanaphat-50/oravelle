@@ -317,7 +317,7 @@ class _ShopPageState extends State<ShopPage> {
           CategoryChoiceChip(
             label: 'ทั้งหมด',
             icon: Icons.apps_rounded,
-            color: marketColor,
+            color: AppColors.market,
             selected: category == null,
             onTap: () {
               if (category == null) return;
@@ -331,7 +331,7 @@ class _ShopPageState extends State<ShopPage> {
             CategoryChoiceChip(
               label: item.label,
               icon: item.icon,
-              color: marketColor,
+              color: AppColors.market,
               selected: category == item.key,
               onTap: () {
                 if (category == item.key) return;
@@ -502,7 +502,7 @@ class _ShopPageState extends State<ShopPage> {
         padding: const EdgeInsets.symmetric(vertical: 36),
         child: Column(
           children: [
-            const Icon(Icons.storefront_outlined, size: 44, color: marketColor),
+            Icon(Icons.storefront_outlined, size: 44, color: AppColors.market),
             const SizedBox(height: 10),
             Text(
               isFiltering

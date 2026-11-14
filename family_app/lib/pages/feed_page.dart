@@ -12,6 +12,7 @@ import '../services/post_service.dart';
 import '../services/search_service.dart';
 import '../services/social_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/themed_widgets.dart';
 import '../widgets/comment_media.dart';
 import '../widgets/comment_sheet.dart';
 import '../widgets/community_sheets.dart';
@@ -4378,6 +4379,7 @@ class _FeedPageState extends State<FeedPage> {
     // โหมดโพสต์เดียว: โพสต์ถูกลบ/รายงานไปแล้วระหว่างเปิดดู
     if (isSinglePost) {
       return buildStateCard(
+        art: true,
         icon: Icons.inbox_outlined,
         color: AppColors.muted,
         title: 'ไม่มีโพสต์นี้แล้ว',
@@ -4387,6 +4389,7 @@ class _FeedPageState extends State<FeedPage> {
 
     if (isAuthorFeed) {
       return buildStateCard(
+        art: true,
         icon: Icons.article_outlined,
         color: AppColors.primary,
         title: 'ยังไม่มีโพสต์',
@@ -4397,18 +4400,21 @@ class _FeedPageState extends State<FeedPage> {
     if (scope == FeedScope.mine) {
       return switch (widget.mineVisibility) {
         'community' => buildStateCard(
+          art: true,
           icon: Icons.public_rounded,
           color: communityColor,
           title: 'ยังไม่มีโพสต์ในชุมชน',
           message: 'โพสต์ที่คุณแชร์ให้ทุกคนในชุมชนเห็นจะแสดงที่นี่',
         ),
         'family' => buildStateCard(
+          art: true,
           icon: Icons.groups_rounded,
           color: AppColors.primary,
           title: 'ยังไม่มีโพสต์ในกลุ่ม',
           message: 'โพสต์ที่คุณแชร์ในกลุ่มจะแสดงที่นี่ เห็นเฉพาะสมาชิกในกลุ่ม',
         ),
         _ => buildStateCard(
+          art: true,
           icon: Icons.edit_note_rounded,
           color: AppColors.primary,
           title: 'ยังไม่มีโพสต์',
@@ -4419,6 +4425,7 @@ class _FeedPageState extends State<FeedPage> {
 
     if (isSavedFeed) {
       return buildStateCard(
+        art: true,
         icon: Icons.bookmark_border_rounded,
         color: AppColors.primary,
         title: 'ยังไม่มีโพสต์ที่บันทึก',
@@ -4430,6 +4437,7 @@ class _FeedPageState extends State<FeedPage> {
       final bool inGroup = widget.searchScope == 'family';
 
       return buildStateCard(
+        art: true,
         icon: Icons.search_off_rounded,
         color: inGroup ? AppColors.primary : communityColor,
         title: 'ไม่พบโพสต์สำหรับคำว่า “${widget.searchQuery}”',
@@ -4443,6 +4451,7 @@ class _FeedPageState extends State<FeedPage> {
 
     if (isHashtagFeed) {
       return buildStateCard(
+        art: true,
         icon: Icons.tag_rounded,
         color: communityColor,
         title: 'ยังไม่มีโพสต์ #${widget.hashtag}',
@@ -4452,6 +4461,7 @@ class _FeedPageState extends State<FeedPage> {
 
     if (videosOnly) {
       return buildStateCard(
+        art: true,
         icon: Icons.smart_display_rounded,
         color: communityColor,
         title: filter == null
@@ -4463,6 +4473,7 @@ class _FeedPageState extends State<FeedPage> {
 
     if (scope == FeedScope.community && filter != null) {
       return buildStateCard(
+        art: true,
         icon: filter.icon,
         color: filter.color,
         title: 'ยังไม่มีโพสต์หมวด "${filter.label}"',
@@ -4472,6 +4483,7 @@ class _FeedPageState extends State<FeedPage> {
 
     if (scope == FeedScope.community) {
       return buildStateCard(
+        art: true,
         icon: Icons.public_rounded,
         color: communityColor,
         title: 'ชุมชนยังเงียบอยู่',
@@ -4502,28 +4514,32 @@ class _FeedPageState extends State<FeedPage> {
     );
   }
 
+  // art: หน้าว่าง (ยังไม่มีข้อมูล) → ใช้ภาพประกอบของธีมถ้ามี
   Widget buildStateCard({
     required IconData icon,
     required Color color,
     required String title,
     required String message,
     Widget? action,
+    bool art = false,
   }) {
+    final Widget iconCircle = Container(
+      width: 76,
+      height: 76,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.09),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, size: 34, color: color),
+    );
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       decoration: cardDecoration(),
       child: Column(
         children: [
-          Container(
-            width: 76,
-            height: 76,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.09),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, size: 34, color: color),
-          ),
+          art ? ThemeEmptyArt(fallback: iconCircle) : iconCircle,
           const SizedBox(height: 18),
           Text(
             title,

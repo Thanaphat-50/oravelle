@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../data/market_data.dart';
 import '../services/market_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/market_widgets.dart';
@@ -115,10 +114,10 @@ class _SavedProductsPageState extends State<SavedProductsPage> {
                 padding: const EdgeInsets.all(32),
                 children: [
                   const SizedBox(height: 60),
-                  const Icon(
+                  Icon(
                     Icons.bookmark_border_rounded,
                     size: 46,
-                    color: marketColor,
+                    color: AppColors.market,
                   ),
                   const SizedBox(height: 10),
                   Text(

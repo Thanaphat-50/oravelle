@@ -5,8 +5,6 @@ import 'package:flutter/material.dart';
 // ต้องตรงกับ config/market.php ใน Laravel
 // =======================================================
 
-// สีของหน้าตลาด (โทนส้ม แยกจากชุมชนและครอบครัว)
-const Color marketColor = Color(0xFFD9701F);
 
 class MarketCategory {
   final String key;

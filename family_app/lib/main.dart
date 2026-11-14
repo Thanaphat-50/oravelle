@@ -13,6 +13,7 @@ import 'services/api_helper.dart';
 import 'services/auth_service.dart';
 
 import 'theme/app_theme.dart';
+import 'theme/app_theming.dart';
 import 'theme/theme_controller.dart';
 import 'widgets/orbit_background.dart';
 import 'pages/splash_page.dart';
@@ -93,8 +94,8 @@ class FamilyOrbitApp extends StatefulWidget {
   State<FamilyOrbitApp> createState() => _FamilyOrbitAppState();
 }
 
-// สลับโหมดสี: ตั้งชุดสีของ AppColors ใหม่ แล้วสั่งทุกหน้าวาดใหม่
-// (หน้าที่เปิดค้างอยู่ใช้สีใหม่ทันที ไม่ต้องปิดแอป)
+// สลับโหมดสี / ธีม: ตั้งชุดสีของ AppColors ใหม่ แล้วสั่งทุกหน้าวาดใหม่
+// (หน้าที่เปิดค้างอยู่ใช้สีใหม่ทันที ไม่ต้องปิดแอป ข้อความที่พิมพ์ค้างไม่หาย)
 class _FamilyOrbitAppState extends State<FamilyOrbitApp>
     with WidgetsBindingObserver {
   @override
@@ -105,6 +106,8 @@ class _FamilyOrbitAppState extends State<FamilyOrbitApp>
 
     ThemeController.mode.addListener(onThemeChanged);
 
+    AppTheming.revision.addListener(onThemeChanged);
+
     applyPalette();
   }
 
@@ -114,7 +117,7 @@ class _FamilyOrbitAppState extends State<FamilyOrbitApp>
     onThemeChanged();
   }
 
-  Brightness get effectiveBrightness {
+  Brightness get requestedBrightness {
     switch (ThemeController.mode.value) {
       case ThemeMode.light:
         return Brightness.light;
@@ -125,22 +128,32 @@ class _FamilyOrbitAppState extends State<FamilyOrbitApp>
     }
   }
 
+  // ธีมไม่มีโหมดที่ขอ (เช่น มีแต่โหมดมืด) → ใช้โหมดที่ธีมมี
   void applyPalette() {
-    AppColors.palette = effectiveBrightness == Brightness.dark
-        ? AppPalette.dark
-        : AppPalette.light;
+    final spec = AppTheming.effective;
+
+    AppColors.palette = spec.paletteFor(requestedBrightness);
+
+    AppShapes.scale = spec.cornerScale;
   }
+
+  Object? lastTheme;
 
   void onThemeChanged() {
     final AppPalette before = AppColors.palette;
 
+    final Object? themeBefore = lastTheme;
+
     applyPalette();
+
+    lastTheme = AppTheming.effective;
 
     if (!mounted) return;
 
     setState(() {});
 
-    if (!identical(before, AppColors.palette)) {
+    if (!identical(before, AppColors.palette) ||
+        !identical(themeBefore, lastTheme)) {
       void rebuild(Element element) {
         element.markNeedsBuild();
         element.visitChildren(rebuild);
@@ -153,6 +166,8 @@ class _FamilyOrbitAppState extends State<FamilyOrbitApp>
   @override
   void dispose() {
     ThemeController.mode.removeListener(onThemeChanged);
+
+    AppTheming.revision.removeListener(onThemeChanged);
 
     WidgetsBinding.instance.removeObserver(this);
 
@@ -168,11 +183,8 @@ class _FamilyOrbitAppState extends State<FamilyOrbitApp>
 
       title: AppInfo.name,
 
-      theme: AppTheme.light(),
-
-      darkTheme: AppTheme.dark(),
-
-      themeMode: ThemeController.mode.value,
+      // ชุดสีที่เลือกแล้ว (ธีม + โหมด) — สลับเมื่อเครื่องเปลี่ยนโหมดผ่าน didChangePlatformBrightness
+      theme: AppTheme.build(AppColors.palette),
 
       home: const SplashPage(nextPage: AuthCheckPage()),
 

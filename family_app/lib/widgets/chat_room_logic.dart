@@ -17,6 +17,8 @@ import '../services/api_helper.dart';
 import '../services/auth_service.dart';
 import '../services/chat_background_store.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_theming.dart';
+import '../theme/themed_widgets.dart';
 import 'chat_media.dart';
 import 'chat_widgets.dart';
 import 'photo_viewer.dart';
@@ -855,12 +857,15 @@ mixin ChatRoomLogic<T extends StatefulWidget>
     if (changed == true) await loadBackground();
   }
 
+  // พื้นหลังที่ตั้งเอง หรือพื้นหลังของธีม (ThemedChatBackground เลือกให้)
   Widget withBackground(Widget child) {
-    if (background == null) return child;
+    if (background == null && !AppTheming.decor.hasChatBackground) {
+      return child;
+    }
 
     return Stack(
       children: [
-        Positioned.fill(child: ChatBackgroundLayer(background: background)),
+        Positioned.fill(child: ThemedChatBackground(custom: background)),
         child,
       ],
     );
@@ -1843,7 +1848,7 @@ mixin ChatRoomLogic<T extends StatefulWidget>
 
     return Stack(
       children: [
-        Positioned.fill(child: ChatBackgroundLayer(background: background)),
+        Positioned.fill(child: ThemedChatBackground(custom: background)),
         ListView(
           controller: scrollController,
           reverse: true,

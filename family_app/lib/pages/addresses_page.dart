@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../data/market_data.dart';
 import '../services/cart_service.dart';
 import '../theme/app_theme.dart';
 import 'address_form_page.dart';
@@ -126,11 +125,11 @@ class _AddressesPageState extends State<AddressesPage> {
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: selected
-            ? marketColor.withValues(alpha: 0.06)
+            ? AppColors.market.withValues(alpha: 0.06)
             : AppColors.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: selected ? marketColor : AppColors.border,
+          color: selected ? AppColors.market : AppColors.border,
           width: selected ? 1.6 : 1,
         ),
       ),
@@ -148,7 +147,7 @@ class _AddressesPageState extends State<AddressesPage> {
                 selected
                     ? Icons.radio_button_checked_rounded
                     : Icons.location_on_outlined,
-                color: marketColor,
+                color: AppColors.market,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -175,13 +174,13 @@ class _AddressesPageState extends State<AddressesPage> {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: marketColor.withValues(alpha: 0.12),
+                              color: AppColors.market.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(99),
                             ),
-                            child: const Text(
+                            child: Text(
                               'ที่อยู่หลัก',
                               style: TextStyle(
-                                color: marketColor,
+                                color: AppColors.market,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -261,7 +260,7 @@ class _AddressesPageState extends State<AddressesPage> {
                   const SizedBox(height: 6),
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
-                      backgroundColor: marketColor,
+                      backgroundColor: AppColors.market,
                       minimumSize: const Size(double.infinity, 52),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),

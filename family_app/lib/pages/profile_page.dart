@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../data/market_data.dart';
 import '../services/api_helper.dart';
 import '../services/profile_service.dart';
 import '../theme/app_theme.dart';
@@ -831,10 +830,10 @@ class _ProfilePageState extends State<ProfilePage> {
                     width: 38,
                     height: 38,
                     decoration: BoxDecoration(
-                      color: marketColor.withValues(alpha: 0.10),
+                      color: AppColors.market.withValues(alpha: 0.10),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(icon, color: marketColor, size: 20),
+                    child: Icon(icon, color: AppColors.market, size: 20),
                   ),
                   const SizedBox(height: 6),
                   Text(

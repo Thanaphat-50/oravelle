@@ -404,8 +404,8 @@ class _MarketProductPageState extends State<MarketProductPage> {
                 child: OutlinedButton(
                   // ธีมของแอปให้ปุ่มกว้างเต็มจอ → ในแถวต้องกำหนดขนาดเอง
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: marketColor,
-                    side: const BorderSide(color: marketColor, width: 1.4),
+                    foregroundColor: AppColors.market,
+                    side: BorderSide(color: AppColors.market, width: 1.4),
                     minimumSize: const Size(0, 52),
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     shape: RoundedRectangleBorder(
@@ -436,7 +436,7 @@ class _MarketProductPageState extends State<MarketProductPage> {
               child: available
                   ? FilledButton(
                       style: FilledButton.styleFrom(
-                        backgroundColor: marketColor,
+                        backgroundColor: AppColors.market,
                         minimumSize: const Size(0, 52),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
@@ -651,8 +651,8 @@ class _MarketProductPageState extends State<MarketProductPage> {
               Expanded(
                 child: Text(
                   priceText(data),
-                  style: const TextStyle(
-                    color: marketColor,
+                  style: TextStyle(
+                    color: AppColors.market,
                     fontSize: 28,
                     fontWeight: FontWeight.w800,
                   ),
@@ -771,7 +771,7 @@ class _MarketProductPageState extends State<MarketProductPage> {
               ),
             ),
             if (canOrder && data['is_mine'] != true)
-              const Icon(Icons.chevron_right_rounded, color: marketColor),
+              Icon(Icons.chevron_right_rounded, color: AppColors.market),
           ],
         ),
       ),
@@ -945,18 +945,18 @@ class _MarketProductPageState extends State<MarketProductPage> {
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: marketColor.withValues(alpha: 0.08),
+                color: AppColors.market.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(category.icon, size: 14, color: marketColor),
+                  Icon(category.icon, size: 14, color: AppColors.market),
                   const SizedBox(width: 5),
                   Text(
                     category.label,
-                    style: const TextStyle(
-                      color: marketColor,
+                    style: TextStyle(
+                      color: AppColors.market,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                     ),
@@ -1111,13 +1111,13 @@ class _MarketProductPageState extends State<MarketProductPage> {
               children: [
                 CircleAvatar(
                   radius: 24,
-                  backgroundColor: marketColor.withValues(alpha: 0.10),
+                  backgroundColor: AppColors.market.withValues(alpha: 0.10),
                   foregroundImage: logoUrl != null
                       ? NetworkImage(logoUrl)
                       : null,
-                  child: const Icon(
+                  child: Icon(
                     Icons.storefront_rounded,
-                    color: marketColor,
+                    color: AppColors.market,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1154,8 +1154,8 @@ class _MarketProductPageState extends State<MarketProductPage> {
                 OutlinedButton(
                   // ธีมของแอปให้ปุ่มกว้างเต็มจอ → ในแถวต้องกำหนดขนาดเอง
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: marketColor,
-                    side: const BorderSide(color: marketColor),
+                    foregroundColor: AppColors.market,
+                    side: BorderSide(color: AppColors.market),
                     minimumSize: const Size(0, 38),
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                   ),
@@ -1303,7 +1303,7 @@ class _MarketProductPageState extends State<MarketProductPage> {
                 icon: Badge(
                   isLabelVisible: count > 0,
                   label: Text(count > 99 ? '99+' : '$count'),
-                  backgroundColor: marketColor,
+                  backgroundColor: AppColors.market,
                   child: const Icon(Icons.shopping_cart_outlined),
                 ),
               ),
@@ -1320,7 +1320,7 @@ class _MarketProductPageState extends State<MarketProductPage> {
                 isSaved
                     ? Icons.bookmark_rounded
                     : Icons.bookmark_border_rounded,
-                color: isSaved ? marketColor : null,
+                color: isSaved ? AppColors.market : null,
               ),
             ),
           ],

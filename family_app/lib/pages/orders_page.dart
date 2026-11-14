@@ -179,7 +179,7 @@ class _OrdersPageState extends State<OrdersPage> {
                   return count > 0 ? '$label ($count)' : label;
                 }()),
                 selected: filter == key,
-                selectedColor: marketColor.withValues(alpha: 0.16),
+                selectedColor: AppColors.market.withValues(alpha: 0.16),
                 onSelected: (_) => selectTab(key),
               ),
             ),
@@ -224,9 +224,9 @@ class _OrdersPageState extends State<OrdersPage> {
                     child: imageUrl == null
                         ? ColoredBox(
                             color: AppColors.fill,
-                            child: const Icon(
+                            child: Icon(
                               Icons.shopping_bag_outlined,
-                              color: marketColor,
+                              color: AppColors.market,
                             ),
                           )
                         : Image.network(
@@ -287,8 +287,8 @@ class _OrdersPageState extends State<OrdersPage> {
                           const SizedBox(width: 8),
                           Text(
                             formatPrice(order['total']),
-                            style: const TextStyle(
-                              color: marketColor,
+                            style: TextStyle(
+                              color: AppColors.market,
                               fontSize: 14,
                               fontWeight: FontWeight.w800,
                             ),
@@ -399,10 +399,10 @@ class _OrdersPageState extends State<OrdersPage> {
                     builder: (context) => const ShopSalesPage(),
                   ),
                 ),
-                icon: const Icon(Icons.bar_chart_rounded, color: marketColor),
-                label: const Text(
+                icon: Icon(Icons.bar_chart_rounded, color: AppColors.market),
+                label: Text(
                   'ยอดขาย',
-                  style: TextStyle(color: marketColor),
+                  style: TextStyle(color: AppColors.market),
                 ),
               ),
           ],

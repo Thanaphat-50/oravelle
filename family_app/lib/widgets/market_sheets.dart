@@ -18,12 +18,12 @@ Future<void> showSellerRulesDialog(BuildContext context) {
           width: 56,
           height: 56,
           decoration: BoxDecoration(
-            color: marketColor.withValues(alpha: 0.10),
+            color: AppColors.market.withValues(alpha: 0.10),
             shape: BoxShape.circle,
           ),
-          child: const Icon(
+          child: Icon(
             Icons.storefront_rounded,
-            color: marketColor,
+            color: AppColors.market,
             size: 28,
           ),
         ),
@@ -71,7 +71,7 @@ Future<void> showSellerRulesDialog(BuildContext context) {
         actions: [
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: marketColor,
+              backgroundColor: AppColors.market,
               minimumSize: const Size(double.infinity, 48),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
@@ -101,7 +101,7 @@ class _SellerRule extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: marketColor),
+          Icon(icon, size: 20, color: AppColors.market),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -279,16 +279,16 @@ class _ProvincePickerState extends State<_ProvincePicker> {
                           title: Text(
                             province,
                             style: TextStyle(
-                              color: selected ? marketColor : AppColors.navy,
+                              color: selected ? AppColors.market : AppColors.navy,
                               fontWeight: selected
                                   ? FontWeight.w800
                                   : FontWeight.w500,
                             ),
                           ),
                           trailing: selected
-                              ? const Icon(
+                              ? Icon(
                                   Icons.check_rounded,
-                                  color: marketColor,
+                                  color: AppColors.market,
                                 )
                               : null,
                           onTap: () {

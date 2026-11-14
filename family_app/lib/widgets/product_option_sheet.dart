@@ -116,8 +116,8 @@ class _ProductOptionSheetState extends State<_ProductOptionSheet> {
                     children: [
                       Text(
                         formatPrice(price),
-                        style: const TextStyle(
-                          color: marketColor,
+                        style: TextStyle(
+                          color: AppColors.market,
                           fontSize: 22,
                           fontWeight: FontWeight.w800,
                         ),
@@ -178,7 +178,7 @@ class _ProductOptionSheetState extends State<_ProductOptionSheet> {
                                 : '${variant['name']}',
                           ),
                           selected: identical(selected, variant),
-                          selectedColor: marketColor.withValues(alpha: 0.16),
+                          selectedColor: AppColors.market.withValues(alpha: 0.16),
                           onSelected: variant['sold_out'] == true
                               ? null
                               : (_) {
@@ -241,7 +241,7 @@ class _ProductOptionSheetState extends State<_ProductOptionSheet> {
             const SizedBox(height: 16),
             FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: marketColor,
+                backgroundColor: AppColors.market,
                 minimumSize: const Size(double.infinity, 52),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),

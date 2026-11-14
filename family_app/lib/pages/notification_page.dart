@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../data/market_data.dart';
 import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/themed_widgets.dart';
 import '../widgets/featured_shops_banner.dart' show featuredColor;
 import 'market_product_page.dart';
 import 'market_shop_page.dart';
@@ -480,9 +480,9 @@ class _NotificationPageState extends State<NotificationPage> {
           color: AppColors.warm,
         );
       case 'shop_status':
-        return const _NotificationStyle(
+        return _NotificationStyle(
           icon: Icons.storefront_rounded,
-          color: marketColor,
+          color: AppColors.market,
         );
       case 'market_flag':
         return _NotificationStyle(
@@ -495,9 +495,9 @@ class _NotificationPageState extends State<NotificationPage> {
           color: AppColors.danger,
         );
       case 'order_status':
-        return const _NotificationStyle(
+        return _NotificationStyle(
           icon: Icons.receipt_long_rounded,
-          color: marketColor,
+          color: AppColors.market,
         );
       case 'support_ticket':
         return _NotificationStyle(
@@ -630,12 +630,15 @@ class _NotificationPageState extends State<NotificationPage> {
     required String title,
     required String message,
     Widget? action,
+    bool art = false,
   }) {
+    final Widget symbol = Icon(icon, size: 52, color: AppColors.muted);
+
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(32, 120, 32, 32),
       children: [
-        Icon(icon, size: 52, color: AppColors.muted),
+        art ? ThemeEmptyArt(fallback: symbol) : symbol,
         const SizedBox(height: 14),
         Text(
           title,
@@ -682,6 +685,7 @@ class _NotificationPageState extends State<NotificationPage> {
 
     if (items.isEmpty) {
       return buildState(
+        art: true,
         icon: Icons.notifications_none_rounded,
         title: 'ยังไม่มีการแจ้งเตือน',
         message: 'เมื่อมีโพสต์ ความคิดเห็น หรือกิจกรรมใหม่ จะแจ้งที่นี่',

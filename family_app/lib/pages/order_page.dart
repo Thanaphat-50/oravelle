@@ -165,7 +165,7 @@ class _OrderPageState extends State<OrderPage> {
             child: const Text('ยังก่อน'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: marketColor),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.market),
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(confirmLabel),
           ),
@@ -574,8 +574,8 @@ class _OrderPageState extends State<OrderPage> {
           ),
           Text(
             amount,
-            style: const TextStyle(
-              color: marketColor,
+            style: TextStyle(
+              color: AppColors.market,
               fontSize: 30,
               fontWeight: FontWeight.w800,
             ),
@@ -655,7 +655,7 @@ class _OrderPageState extends State<OrderPage> {
             child: FilledButton.icon(
               onPressed: isWorking || payment == null ? null : attachSlip,
               style: FilledButton.styleFrom(
-                backgroundColor: marketColor,
+                backgroundColor: AppColors.market,
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
               icon: const Icon(Icons.receipt_long_rounded),
@@ -744,7 +744,7 @@ class _OrderPageState extends State<OrderPage> {
             Text(
               value,
               style: TextStyle(
-                color: bold ? marketColor : AppColors.navy,
+                color: bold ? AppColors.market : AppColors.navy,
                 fontSize: bold ? 17 : 13.5,
                 fontWeight: FontWeight.w800,
               ),
@@ -794,8 +794,8 @@ class _OrderPageState extends State<OrderPage> {
           child: OutlinedButton.icon(
             // ธีมของแอปให้ปุ่มกว้างเต็มจอ → กำหนดขนาดเอง
             style: OutlinedButton.styleFrom(
-              foregroundColor: marketColor,
-              side: const BorderSide(color: marketColor),
+              foregroundColor: AppColors.market,
+              side: BorderSide(color: AppColors.market),
               minimumSize: const Size(0, 36),
               padding: const EdgeInsets.symmetric(horizontal: 12),
             ),
@@ -944,7 +944,7 @@ class _OrderPageState extends State<OrderPage> {
                 ? IconButton(
                     tooltip: 'โทรหาลูกค้า',
                     onPressed: () => launchUrl(Uri(scheme: 'tel', path: phone)),
-                    icon: const Icon(Icons.call_rounded, color: marketColor),
+                    icon: Icon(Icons.call_rounded, color: AppColors.market),
                   )
                 : null,
           ),
@@ -1110,8 +1110,8 @@ class _OrderPageState extends State<OrderPage> {
       width: double.infinity,
       child: OutlinedButton.icon(
         style: OutlinedButton.styleFrom(
-          foregroundColor: marketColor,
-          side: const BorderSide(color: marketColor),
+          foregroundColor: AppColors.market,
+          side: BorderSide(color: AppColors.market),
           minimumSize: const Size(0, 44),
         ),
         onPressed: isOpeningChat ? null : () => openChat(data),
@@ -1157,7 +1157,7 @@ class _OrderPageState extends State<OrderPage> {
                   ),
             child: Row(
               children: [
-                const Icon(Icons.storefront_rounded, color: marketColor),
+                Icon(Icons.storefront_rounded, color: AppColors.market),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -1169,7 +1169,7 @@ class _OrderPageState extends State<OrderPage> {
                     ),
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded, color: marketColor),
+                Icon(Icons.chevron_right_rounded, color: AppColors.market),
               ],
             ),
           ),
@@ -1282,7 +1282,7 @@ class _OrderPageState extends State<OrderPage> {
         padding: const EdgeInsets.only(bottom: 10),
         child: FilledButton.icon(
           style: FilledButton.styleFrom(
-            backgroundColor: marketColor,
+            backgroundColor: AppColors.market,
             minimumSize: const Size(double.infinity, 52),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18),
@@ -1304,8 +1304,8 @@ class _OrderPageState extends State<OrderPage> {
         padding: const EdgeInsets.only(bottom: 10),
         child: OutlinedButton(
           style: OutlinedButton.styleFrom(
-            foregroundColor: danger ? AppColors.danger : marketColor,
-            side: BorderSide(color: danger ? AppColors.danger : marketColor),
+            foregroundColor: danger ? AppColors.danger : AppColors.market,
+            side: BorderSide(color: danger ? AppColors.danger : AppColors.market),
             minimumSize: const Size(double.infinity, 50),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18),
@@ -1614,7 +1614,7 @@ Future<String?> showTextDialog(
         ),
         FilledButton(
           style: FilledButton.styleFrom(
-            backgroundColor: danger ? AppColors.danger : marketColor,
+            backgroundColor: danger ? AppColors.danger : AppColors.market,
           ),
           onPressed: () {
             if (!(formKey.currentState?.validate() ?? false)) return;
@@ -1735,7 +1735,7 @@ Future<({String? carrier, String tracking, String note})?> showShipDialog(
               child: const Text('ยังก่อน'),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: marketColor),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.market),
               onPressed: () {
                 if (!(formKey.currentState?.validate() ?? false)) return;
 

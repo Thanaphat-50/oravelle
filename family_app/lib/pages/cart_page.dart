@@ -200,7 +200,7 @@ class _CartPageState extends State<CartPage> {
           children: [
             Checkbox(
               value: canOrder && selected.contains(id),
-              activeColor: marketColor,
+              activeColor: AppColors.market,
               onChanged: !canOrder || working
                   ? null
                   : (checked) => setState(() {
@@ -271,8 +271,8 @@ class _CartPageState extends State<CartPage> {
                       Expanded(
                         child: Text(
                           formatPrice(item['unit_price']),
-                          style: const TextStyle(
-                            color: marketColor,
+                          style: TextStyle(
+                            color: AppColors.market,
                             fontSize: 14.5,
                             fontWeight: FontWeight.w800,
                           ),
@@ -306,9 +306,9 @@ class _CartPageState extends State<CartPage> {
                         onPressed: working || !canOrder || quantity >= max
                             ? null
                             : () => setQuantity(item, quantity + 1),
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.add_circle_outline_rounded,
-                          color: marketColor,
+                          color: AppColors.market,
                         ),
                       ),
                     ],
@@ -344,7 +344,7 @@ class _CartPageState extends State<CartPage> {
             children: [
               Checkbox(
                 value: allSelected,
-                activeColor: marketColor,
+                activeColor: AppColors.market,
                 onChanged: ids.isEmpty
                     ? null
                     : (checked) => setState(() {
@@ -355,9 +355,9 @@ class _CartPageState extends State<CartPage> {
                         }
                       }),
               ),
-              const Icon(
+              Icon(
                 Icons.storefront_rounded,
-                color: marketColor,
+                color: AppColors.market,
                 size: 20,
               ),
               const SizedBox(width: 6),
@@ -406,10 +406,10 @@ class _CartPageState extends State<CartPage> {
                       padding: const EdgeInsets.all(32),
                       children: [
                         const SizedBox(height: 60),
-                        const Icon(
+                        Icon(
                           Icons.shopping_cart_outlined,
                           size: 52,
-                          color: marketColor,
+                          color: AppColors.market,
                         ),
                         const SizedBox(height: 12),
                         Text(
@@ -457,8 +457,8 @@ class _CartPageState extends State<CartPage> {
                           ),
                           Text(
                             formatPrice(total),
-                            style: const TextStyle(
-                              color: marketColor,
+                            style: TextStyle(
+                              color: AppColors.market,
                               fontSize: 20,
                               fontWeight: FontWeight.w800,
                             ),
@@ -468,7 +468,7 @@ class _CartPageState extends State<CartPage> {
                     ),
                     FilledButton(
                       style: FilledButton.styleFrom(
-                        backgroundColor: marketColor,
+                        backgroundColor: AppColors.market,
                         minimumSize: const Size(150, 52),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),

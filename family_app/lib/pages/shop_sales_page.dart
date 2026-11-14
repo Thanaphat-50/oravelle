@@ -372,7 +372,7 @@ class _ShopSalesPageState extends State<ShopSalesPage> {
                                     height: height,
                                     decoration: BoxDecoration(
                                       color: total > 0
-                                          ? marketColor
+                                          ? AppColors.market
                                           : AppColors.fill,
                                       borderRadius: const BorderRadius.vertical(
                                         top: Radius.circular(4),
