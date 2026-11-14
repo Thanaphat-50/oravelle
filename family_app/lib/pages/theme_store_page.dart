@@ -485,7 +485,8 @@ class _ThemeDetailPageState extends State<ThemeDetailPage> {
                       ],
                       Row(
                         children: [
-                          if (!theme.builtIn) ...[
+                          // ลองได้ทุกธีมที่ไม่ได้ใช้อยู่ (รวม Lavender ตอนใช้ธีมอื่น)
+                          if (AppTheming.active.id != theme.slug) ...[
                             Expanded(
                               child: OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
