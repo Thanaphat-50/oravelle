@@ -1690,6 +1690,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         Expanded(
           child: SwipeSections(
             index: homeMode.index,
+            keepAlive: [
+              for (final mode in CommunityFeedMode.values)
+                mode != CommunityFeedMode.videos,
+            ],
             onChanged: (index) {
               showHomeMode(CommunityFeedMode.values[index]);
             },

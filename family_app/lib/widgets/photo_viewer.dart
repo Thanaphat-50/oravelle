@@ -1,36 +1,142 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_motion.dart';
+
 // =======================================================
 // ดูรูปเต็มจอ
-// - ปัดซ้าย-ขวาเพื่อดูรูปถัดไป
-// - จีบนิ้ว หรือแตะสองครั้งเพื่อซูม
+// - แตะภาพย่อ → ขยายต่อเนื่องไปเต็มจอ (Hero) / ปิด → ย่อกลับที่เดิม
+//   ภาพต้นทางเลื่อนออก/ถูกลบ/หมดสิทธิ์ระหว่างเปิด → ไม่มีภาพให้กลับไป = ปิดแบบจางหายแทน
+// - heroTags: tag ของภาพย่อแต่ละรูป (ต้องไม่ซ้ำกันในจอ ใช้ object ใหม่ต่อภาพย่อ)
+// - ปัดซ้าย-ขวาเพื่อดูรูปถัดไป / จีบนิ้ว หรือแตะสองครั้งเพื่อซูม
 // =======================================================
 
 Future<void> showPhotoViewer(
   BuildContext context, {
   required List<String> urls,
   int initialIndex = 0,
+  List<Object?> heroTags = const [],
 }) {
   return Navigator.of(context).push(
     PageRouteBuilder<void>(
       opaque: false,
-      transitionDuration: const Duration(milliseconds: 200),
-      reverseTransitionDuration: const Duration(milliseconds: 150),
+      transitionDuration: AppMotion.of(context, AppMotion.page),
+      reverseTransitionDuration: AppMotion.of(context, AppMotion.panel),
       pageBuilder: (context, animation, secondaryAnimation) {
         return FadeTransition(
           opacity: animation,
-          child: PhotoViewerPage(urls: urls, initialIndex: initialIndex),
+          child: PhotoViewerPage(
+            urls: urls,
+            initialIndex: initialIndex,
+            heroTags: heroTags,
+          ),
         );
       },
     ),
   );
 }
 
+// ระหว่างบิน: ใช้ภาพย่อที่โหลดแล้ว (ขึ้นทันที) ค่อย ๆ เปลี่ยนจากครอบเต็มกรอบ → พอดีจอ
+// 0 = ตำแหน่งภาพย่อ, 1 = เต็มจอ (ทั้งตอนเปิดและปิด)
+Widget photoHeroShuttle(
+  BuildContext flightContext,
+  Animation<double> animation,
+  HeroFlightDirection direction,
+  BuildContext fromHeroContext,
+  BuildContext toHeroContext,
+) {
+  final Hero thumb =
+      (direction == HeroFlightDirection.push ? fromHeroContext : toHeroContext)
+              .widget
+          as Hero;
+
+  final Widget child = thumb.child;
+
+  if (child is! Image) return (fromHeroContext.widget as Hero).child;
+
+  return AnimatedBuilder(
+    animation: animation,
+    builder: (context, _) {
+      final double t = animation.value.clamp(0.0, 1.0);
+
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Opacity(
+            opacity: 1 - t,
+            child: Image(
+              image: child.image,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              errorBuilder: (context, error, stackTrace) =>
+                  const SizedBox.shrink(),
+            ),
+          ),
+          Opacity(
+            opacity: t,
+            child: Image(
+              image: child.image,
+              fit: BoxFit.contain,
+              gaplessPlayback: true,
+              errorBuilder: (context, error, stackTrace) =>
+                  const SizedBox.shrink(),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+// ภาพย่อที่เปิดดูเต็มจอได้ (ใช้กับ Image โดยตรง เพื่อให้ระหว่างบินใช้ภาพที่โหลดแล้ว)
+class PhotoHero extends StatelessWidget {
+  final Object? tag;
+  final Widget child;
+
+  const PhotoHero({super.key, required this.tag, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final Object? value = tag;
+
+    if (value == null) return child;
+
+    return Hero(
+      tag: value,
+      flightShuttleBuilder: photoHeroShuttle,
+      child: child,
+    );
+  }
+}
+
+// tag ของภาพย่อ ผูกกับ object เจ้าของ (เช่น Map ของโพสต์/ข้อความ) → คงที่ตอน rebuild และไม่ชนกัน
+// แม้รูปเดียวกันปรากฏหลายที่ (คนละเจ้าของ = คนละ tag)
+class PhotoHeroTags {
+  final Expando<List<Object>> _tags = Expando('photo-hero');
+
+  List<Object> of(Object owner, int count) {
+    final List<Object>? existing = _tags[owner];
+
+    if (existing != null && existing.length == count) return existing;
+
+    final List<Object> created = List<Object>.generate(count, (_) => Object());
+
+    _tags[owner] = created;
+
+    return created;
+  }
+}
+
 class PhotoViewerPage extends StatefulWidget {
   final List<String> urls;
   final int initialIndex;
+  final List<Object?> heroTags;
 
-  const PhotoViewerPage({super.key, required this.urls, this.initialIndex = 0});
+  const PhotoViewerPage({
+    super.key,
+    required this.urls,
+    this.initialIndex = 0,
+    this.heroTags = const [],
+  });
 
   @override
   State<PhotoViewerPage> createState() => _PhotoViewerPageState();
@@ -78,6 +184,9 @@ class _PhotoViewerPageState extends State<PhotoViewerPage> {
               return _ZoomablePhoto(
                 key: ValueKey('photo-$index'),
                 url: widget.urls[index],
+                heroTag: index < widget.heroTags.length
+                    ? widget.heroTags[index]
+                    : null,
                 onZoomChanged: onZoomChanged,
               );
             },
@@ -141,12 +250,14 @@ class _PhotoViewerPageState extends State<PhotoViewerPage> {
 
 class _ZoomablePhoto extends StatefulWidget {
   final String url;
+  final Object? heroTag;
   final ValueChanged<bool> onZoomChanged;
 
   const _ZoomablePhoto({
     super.key,
     required this.url,
     required this.onZoomChanged,
+    this.heroTag,
   });
 
   @override
@@ -195,40 +306,43 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto> {
         onInteractionEnd: (_) {
           widget.onZoomChanged(isZoomed);
         },
-        child: Image.network(
-          widget.url,
-          width: double.infinity,
-          height: double.infinity,
-          fit: BoxFit.contain,
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) return child;
+        child: PhotoHero(
+          tag: widget.heroTag,
+          child: Image.network(
+            widget.url,
+            width: double.infinity,
+            height: double.infinity,
+            fit: BoxFit.contain,
+            loadingBuilder: (context, child, progress) {
+              if (progress == null) return child;
 
-            return const Center(
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white70,
-              ),
-            );
-          },
-          errorBuilder: (context, error, stackTrace) {
-            return const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.broken_image_outlined,
-                    color: Colors.white54,
-                    size: 48,
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'โหลดรูปไม่สำเร็จ',
-                    style: TextStyle(color: Colors.white70),
-                  ),
-                ],
-              ),
-            );
-          },
+              return const Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white70,
+                ),
+              );
+            },
+            errorBuilder: (context, error, stackTrace) {
+              return const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.broken_image_outlined,
+                      color: Colors.white54,
+                      size: 48,
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'โหลดรูปไม่สำเร็จ',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ),
       ),
     );

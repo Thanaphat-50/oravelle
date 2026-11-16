@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_motion.dart';
+
 // =======================================================
 // หน้าย่อยที่ปัดซ้าย-ขวาสลับกันได้ (เฉพาะในหน้าเดียวกัน)
 // - index: หน้าย่อยที่เลือกอยู่ (หน้าแม่เป็นคนเก็บ)
@@ -15,11 +17,16 @@ class SwipeSections extends StatefulWidget {
 
   final List<Widget> children;
 
+  // แท็บที่ต้องเก็บไว้แม้เลื่อนไปแท็บอื่น (ตำแหน่งเลื่อน/ข้อมูลไม่หาย ไม่โหลดซ้ำ)
+  // null = เก็บทุกแท็บ / false ที่ตำแหน่งใด = ไม่เก็บ (เช่น หน้าวิดีโอ ต้องหยุดเล่นเมื่อออก)
+  final List<bool>? keepAlive;
+
   const SwipeSections({
     super.key,
     required this.index,
     required this.onChanged,
     required this.children,
+    this.keepAlive,
   });
 
   @override
@@ -42,10 +49,18 @@ class _SwipeSectionsState extends State<SwipeSections> {
     // ปัดเลยครึ่งทางแล้ว (หน้าแม่รู้แล้ว) → ไม่ต้องเลื่อนซ้ำ
     if (page == null || page.round() == widget.index) return;
 
+    final Duration duration = AppMotion.of(context, AppMotion.page);
+
+    // ลดการเคลื่อนไหว / ข้ามหลายแท็บ → กระโดดตรง ไม่วิ่งผ่านแท็บกลาง (ไม่สร้าง/โหลดแท็บที่ข้าม)
+    if (duration == Duration.zero || (page - widget.index).abs() > 1.5) {
+      controller.jumpToPage(widget.index);
+      return;
+    }
+
     controller.animateToPage(
       widget.index,
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeOutCubic,
+      duration: duration,
+      curve: AppMotion.move,
     );
   }
 
@@ -56,7 +71,12 @@ class _SwipeSectionsState extends State<SwipeSections> {
       onPageChanged: (index) {
         if (index != widget.index) widget.onChanged(index);
       },
-      children: widget.children,
+      children: [
+        for (int i = 0; i < widget.children.length; i++)
+          widget.keepAlive == null || widget.keepAlive![i]
+              ? _KeepAlive(child: widget.children[i])
+              : widget.children[i],
+      ],
     );
   }
 
@@ -65,5 +85,27 @@ class _SwipeSectionsState extends State<SwipeSections> {
     controller.dispose();
 
     super.dispose();
+  }
+}
+
+class _KeepAlive extends StatefulWidget {
+  final Widget child;
+
+  const _KeepAlive({required this.child});
+
+  @override
+  State<_KeepAlive> createState() => _KeepAliveState();
+}
+
+class _KeepAliveState extends State<_KeepAlive>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+
+    return widget.child;
   }
 }

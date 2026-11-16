@@ -375,59 +375,28 @@ Future<bool> ensureChatPermission(
 // เมนูแนบ
 // =====================================================
 
-Future<String?> showChatAttachMenu(BuildContext context) {
-  Widget option(
-    BuildContext sheetContext,
-    String value,
-    IconData icon,
-    String label,
-    Color color,
-  ) {
-    return Semantics(
-      button: true,
-      label: label,
-      excludeSemantics: true,
-      child: InkWell(
-        onTap: () => Navigator.of(sheetContext).pop(value),
-        borderRadius: BorderRadius.circular(16),
-        child: SizedBox(
-          width: 76,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircleAvatar(
-                  radius: 30,
-                  backgroundColor: color.withValues(
-                    alpha: AppColors.isDark ? 0.24 : 0.13,
-                  ),
-                  child: Icon(icon, color: color, size: 28),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppColors.navy,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+// แผงแนบในแชท: เลื่อนขึ้นใต้ช่องพิมพ์ (ห้องแชทคุมเปิด/ปิด + ปุ่มย้อนกลับ)
+// ตัวเลือกทั้งหมดมีใช้จริงในทุกห้อง (สิทธิ์กล้อง/ไฟล์ขอตอนกดใช้)
+class ChatAttachPanel extends StatelessWidget {
+  final ValueChanged<String> onPick;
 
-  return showModalBottomSheet<String>(
-    context: context,
-    showDragHandle: true,
-    builder: (sheetContext) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+  const ChatAttachPanel({super.key, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    final List<(String, IconData, String, Color)> options = [
+      ('camera', Icons.photo_camera_outlined, 'กล้อง', AppColors.primary),
+      ('gallery', Icons.image_outlined, 'รูปภาพ', AppColors.sky),
+      ('file', Icons.insert_drive_file_outlined, 'ไฟล์', AppColors.success),
+      ('link', Icons.link_rounded, 'ลิงก์', AppColors.warm),
+    ];
+
+    return Container(
+      width: double.infinity,
+      color: AppColors.surface,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: SafeArea(
+        top: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -436,51 +405,61 @@ Future<String?> showChatAttachMenu(BuildContext context) {
               'แนบในแชท',
               style: TextStyle(
                 color: AppColors.navy,
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Wrap(
               alignment: WrapAlignment.spaceBetween,
-              runSpacing: 8,
+              runSpacing: 4,
               spacing: 8,
               children: [
-                option(
-                  sheetContext,
-                  'camera',
-                  Icons.photo_camera_outlined,
-                  'กล้อง',
-                  const Color(0xFF7C3AED),
-                ),
-                option(
-                  sheetContext,
-                  'gallery',
-                  Icons.image_outlined,
-                  'รูปภาพ',
-                  const Color(0xFF2563EB),
-                ),
-                option(
-                  sheetContext,
-                  'file',
-                  Icons.insert_drive_file_outlined,
-                  'ไฟล์',
-                  const Color(0xFF16A34A),
-                ),
-                option(
-                  sheetContext,
-                  'link',
-                  Icons.link_rounded,
-                  'ลิงก์',
-                  const Color(0xFFDB2777),
-                ),
+                for (final (value, icon, label, color) in options)
+                  Semantics(
+                    button: true,
+                    label: label,
+                    excludeSemantics: true,
+                    child: InkWell(
+                      onTap: () => onPick(value),
+                      borderRadius: BorderRadius.circular(16),
+                      child: SizedBox(
+                        width: 76,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircleAvatar(
+                                radius: 28,
+                                backgroundColor: color.withValues(
+                                  alpha: AppColors.isDark ? 0.24 : 0.13,
+                                ),
+                                child: Icon(icon, color: color, size: 26),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                label,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: AppColors.navy,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ],
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 // =====================================================

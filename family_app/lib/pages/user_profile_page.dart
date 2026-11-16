@@ -8,6 +8,7 @@ import '../services/social_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/community_sheets.dart';
 import '../widgets/profile_intro.dart';
+import '../widgets/photo_viewer.dart';
 import '../widgets/user_avatar.dart';
 import 'chat_room_page.dart';
 import 'edit_profile_page.dart';
@@ -44,6 +45,9 @@ class UserProfilePage extends StatefulWidget {
 
 class _UserProfilePageState extends State<UserProfilePage> {
   static const Color likeColor = Color(0xFFE5486B);
+
+  // รูปโปรไฟล์ที่เปิดเต็มจอ (Hero)
+  final Object avatarHeroTag = Object();
 
   Map<String, dynamic>? profile;
 
@@ -592,13 +596,36 @@ class _UserProfilePageState extends State<UserProfilePage> {
           ),
           child: Column(
             children: [
-              UserAvatar(
-                user: {
-                  'name': name,
-                  'profile_photo_url': profile?['profile_image_url'],
+              // แตะรูปโปรไฟล์ → ดูเต็มจอ (ขยายต่อเนื่อง) เฉพาะเมื่อมีรูป
+              Builder(
+                builder: (context) {
+                  final UserAvatar avatar = UserAvatar(
+                    user: {
+                      'name': name,
+                      'profile_photo_url': profile?['profile_image_url'],
+                    },
+                    radius: 42,
+                    showBorder: true,
+                    heroTag: avatarHeroTag,
+                  );
+
+                  final String? url = avatar.photoUrl;
+
+                  if (url == null) return avatar;
+
+                  return Semantics(
+                    button: true,
+                    label: 'ดูรูปโปรไฟล์ของ $name',
+                    child: GestureDetector(
+                      onTap: () => showPhotoViewer(
+                        context,
+                        urls: [url],
+                        heroTags: [avatarHeroTag],
+                      ),
+                      child: avatar,
+                    ),
+                  );
                 },
-                radius: 42,
-                showBorder: true,
               ),
               const SizedBox(height: 12),
               Text(

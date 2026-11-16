@@ -16,6 +16,7 @@ import '../pages/chat_photo_preview_page.dart';
 import '../services/api_helper.dart';
 import '../services/auth_service.dart';
 import '../services/chat_background_store.dart';
+import '../theme/app_motion.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_theming.dart';
 import '../theme/themed_widgets.dart';
@@ -664,12 +665,28 @@ mixin ChatRoomLogic<T extends StatefulWidget>
   // แนบ: ถ่ายรูป / เลือกรูป / ส่งไฟล์ / แชร์ลิงก์
   // =====================================================
 
-  Future<void> openAttachMenu() async {
+  // แผงแนบใต้ช่องพิมพ์ (ข้อความร่าง / รูปที่เลือก / Reply อยู่ครบ ไม่เลื่อนแชทเอง)
+  bool attachOpen = false;
+
+  void toggleAttach() {
+    if (attachOpen) {
+      setState(() => attachOpen = false);
+      return;
+    }
+
     closeEmoji();
+    inputFocus.unfocus();
+    setState(() => attachOpen = true);
+  }
 
-    final String? choice = await showChatAttachMenu(context);
+  void closeAttach() {
+    if (attachOpen) setState(() => attachOpen = false);
+  }
 
-    if (!mounted || choice == null) return;
+  Future<void> openAttachMenu() async => toggleAttach();
+
+  Future<void> chooseAttachment(String choice) async {
+    closeAttach();
 
     switch (choice) {
       case 'camera':
@@ -877,7 +894,12 @@ mixin ChatRoomLogic<T extends StatefulWidget>
 
   bool emojiOpen = false;
 
+  // tag ภาพในข้อความสำหรับเปิดเต็มจอต่อเนื่อง (ผูกกับข้อความแต่ละอัน)
+  final PhotoHeroTags photoHeroTags = PhotoHeroTags();
+
   void toggleEmoji() {
+    closeAttach();
+
     if (emojiOpen) {
       setState(() => emojiOpen = false);
       inputFocus.requestFocus();
@@ -1308,11 +1330,13 @@ mixin ChatRoomLogic<T extends StatefulWidget>
 
   Widget leaveGuard({required Widget child}) {
     return PopScope(
-      canPop: outbox.isEmpty && !emojiOpen,
+      canPop: outbox.isEmpty && !emojiOpen && !attachOpen,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
 
-        if (emojiOpen) {
+        if (attachOpen) {
+          closeAttach();
+        } else if (emojiOpen) {
           closeEmoji();
         } else {
           confirmLeave();
@@ -1606,38 +1630,48 @@ mixin ChatRoomLogic<T extends StatefulWidget>
       button: true,
       label: 'รูปภาพ แตะเพื่อดูรูปเต็ม',
       child: GestureDetector(
-        onTap: () => showPhotoViewer(context, urls: [url]),
+        onTap: () => showPhotoViewer(
+          context,
+          urls: [url],
+          heroTags: photoHeroTags.of(message, 1),
+        ),
         child: ClipRRect(
           borderRadius: radius,
-          child: Image.network(
-            url,
-            width: 220,
-            height: 230,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => canRefreshImages
-                ? InkWell(
-                    onTap: () => refreshImage(message),
-                    child: Container(
+          child: PhotoHero(
+            tag: photoHeroTags.of(message, 1).first,
+            child: Image.network(
+              url,
+              width: 220,
+              height: 230,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => canRefreshImages
+                  ? InkWell(
+                      onTap: () => refreshImage(message),
+                      child: Container(
+                        width: 220,
+                        height: 120,
+                        color: AppColors.fill,
+                        alignment: Alignment.center,
+                        child: Text(
+                          'แตะเพื่อโหลดรูปใหม่',
+                          style: TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    )
+                  : Container(
                       width: 220,
                       height: 120,
                       color: AppColors.fill,
                       alignment: Alignment.center,
-                      child: Text(
-                        'แตะเพื่อโหลดรูปใหม่',
-                        style: TextStyle(color: AppColors.muted, fontSize: 12),
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        color: AppColors.muted,
                       ),
                     ),
-                  )
-                : Container(
-                    width: 220,
-                    height: 120,
-                    color: AppColors.fill,
-                    alignment: Alignment.center,
-                    child: Icon(
-                      Icons.broken_image_outlined,
-                      color: AppColors.muted,
-                    ),
-                  ),
+            ),
           ),
         ),
       ),
@@ -1929,6 +1963,7 @@ mixin ChatRoomLogic<T extends StatefulWidget>
       onMic: startVoice,
       onEmoji: toggleEmoji,
       emojiOpen: emojiOpen,
+      attachOpen: attachOpen,
       onRemoveImage: () => setState(() => pickedImage = null),
       onSend: send,
       top: reply == null
@@ -1942,13 +1977,54 @@ mixin ChatRoomLogic<T extends StatefulWidget>
             ),
     );
 
-    if (!emojiOpen) return composer;
+    if (emojiOpen) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          composer,
+          ChatEmojiPanel(onPick: insertIntoComposer),
+        ],
+      );
+    }
 
+    final Duration duration = AppMotion.of(context, AppMotion.panel);
+
+    // แผงแนบเลื่อนขึ้นจากด้านล่าง (ลดการเคลื่อนไหว → แสดง/ซ่อนทันที)
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         composer,
-        ChatEmojiPanel(onPick: insertIntoComposer),
+        ClipRect(
+          child: AnimatedSize(
+            duration: duration,
+            curve: AppMotion.enter,
+            alignment: Alignment.topCenter,
+            child: AnimatedSwitcher(
+              duration: duration,
+              switchInCurve: AppMotion.enter,
+              switchOutCurve: AppMotion.exit,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween(
+                    begin: const Offset(0, 0.25),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: attachOpen
+                  ? ChatAttachPanel(
+                      key: const ValueKey('attach-panel'),
+                      onPick: chooseAttachment,
+                    )
+                  : const SizedBox(
+                      key: ValueKey('attach-closed'),
+                      width: double.infinity,
+                    ),
+            ),
+          ),
+        ),
       ],
     );
   }

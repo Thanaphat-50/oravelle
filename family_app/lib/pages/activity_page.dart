@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/activity_service.dart';
 import '../services/api_helper.dart';
+import '../theme/app_motion.dart';
 import '../theme/app_theme.dart';
 import '../theme/themed_widgets.dart';
 import '../widgets/activity_reminder_widgets.dart';
@@ -2163,7 +2164,9 @@ class _VisibilityChoice extends StatelessWidget {
               child: Icon(
                 icon,
 
-                color: selected && enabled ? AppColors.onPrimary : AppColors.muted,
+                color: selected && enabled
+                    ? AppColors.onPrimary
+                    : AppColors.muted,
 
                 size: 20,
               ),
@@ -2280,7 +2283,7 @@ class _FilterChip extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(999),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
+            duration: AppMotion.of(context, AppMotion.button),
             constraints: const BoxConstraints(minHeight: 40),
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: 18),

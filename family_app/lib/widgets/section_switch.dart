@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_motion.dart';
 import '../theme/app_theme.dart';
 
 // =======================================================
@@ -48,7 +49,7 @@ class SectionSwitch<T> extends StatelessWidget {
 
         return underline
             ? buildUnderline(context, compact)
-            : buildButton(compact);
+            : buildButton(context, compact);
       },
     );
   }
@@ -58,7 +59,6 @@ class SectionSwitch<T> extends StatelessWidget {
     final int selected = options
         .indexWhere((option) => option.value == value)
         .clamp(0, count - 1);
-    final bool reduceMotion = MediaQuery.of(context).disableAnimations;
 
     return Stack(
       children: [
@@ -86,10 +86,8 @@ class SectionSwitch<T> extends StatelessWidget {
               count == 1 ? 0 : -1 + 2 * selected / (count - 1),
               0,
             ),
-            duration: reduceMotion
-                ? Duration.zero
-                : const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
+            duration: AppMotion.of(context, AppMotion.panel),
+            curve: AppMotion.move,
             child: FractionallySizedBox(
               widthFactor: 1 / count,
               child: Center(
@@ -150,37 +148,105 @@ class SectionSwitch<T> extends StatelessWidget {
     );
   }
 
-  Widget buildButton(bool compact) {
-    return SizedBox(
-      width: double.infinity,
-      child: SegmentedButton<T>(
-        showSelectedIcon: false,
-        segments: [
-          for (final option in options)
-            ButtonSegment<T>(
-              value: option.value,
-              icon: compact ? null : Icon(option.icon, size: 18),
-              label: Text(
-                option.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+  // ปุ่มแบ่งช่อง: พื้นหลังสีหลักเลื่อนไปช่องที่เลือก (เปลี่ยนเฉพาะตอนค่าที่เลือกเปลี่ยน ไม่เล่นซ้ำตอน rebuild)
+  Widget buildButton(BuildContext context, bool compact) {
+    final int count = options.length;
+    final int selected = options
+        .indexWhere((option) => option.value == value)
+        .clamp(0, count - 1);
+
+    final Duration duration = AppMotion.of(context, AppMotion.panel);
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: 46),
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppShapes.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: AnimatedAlign(
+              alignment: Alignment(
+                count == 1 ? 0 : -1 + 2 * selected / (count - 1),
+                0,
+              ),
+              duration: duration,
+              curve: AppMotion.move,
+              child: FractionallySizedBox(
+                widthFactor: 1 / count,
+                heightFactor: 1,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: AppShapes.circular(13),
+                  ),
+                ),
               ),
             ),
+          ),
+          Row(
+            children: [
+              for (final option in options)
+                Expanded(
+                  child: buildSegment(context, option, compact, duration),
+                ),
+            ],
+          ),
         ],
-        selected: {value},
-        onSelectionChanged: (selection) {
-          onChanged(selection.first);
-        },
-        style: SegmentedButton.styleFrom(
-          backgroundColor: AppColors.surface,
-          foregroundColor: AppColors.muted,
-          selectedBackgroundColor: AppColors.primary,
-          selectedForegroundColor: AppColors.onPrimary,
-          side: BorderSide(color: AppColors.border),
-          minimumSize: const Size(0, 46),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+      ),
+    );
+  }
+
+  Widget buildSegment(
+    BuildContext context,
+    SectionOption<T> option,
+    bool compact,
+    Duration duration,
+  ) {
+    final bool selected = option.value == value;
+
+    final Color color = selected ? AppColors.onPrimary : AppColors.muted;
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: option.label,
+      excludeSemantics: true,
+      child: InkWell(
+        borderRadius: AppShapes.circular(13),
+        onTap: selected ? null : () => onChanged(option.value),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 40),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: TweenAnimationBuilder<Color?>(
+              tween: ColorTween(end: color),
+              duration: duration,
+              builder: (context, animated, child) => Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (!compact) ...[
+                    Icon(option.icon, size: 18, color: animated),
+                    const SizedBox(width: 6),
+                  ],
+                  Flexible(
+                    child: Text(
+                      option.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: animated,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

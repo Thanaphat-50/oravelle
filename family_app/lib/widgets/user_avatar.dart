@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import '../config/api_config.dart';
+import 'photo_viewer.dart';
 
 class UserAvatar extends StatelessWidget {
   final dynamic user;
@@ -9,12 +10,19 @@ class UserAvatar extends StatelessWidget {
 
   final bool showBorder;
 
+  // ใส่ tag → รูปขยายต่อเนื่องไปหน้าดูรูปเต็มจอ (ต้องไม่ซ้ำกันในจอ)
+  final Object? heroTag;
+
   const UserAvatar({
     super.key,
     required this.user,
     this.radius = 22,
     this.showBorder = false,
+    this.heroTag,
   });
+
+  // ลิงก์รูปโปรไฟล์ที่ใช้แสดง (ไม่มีรูป = null)
+  String? get photoUrl => _photoUrl;
 
   static const String _serverUrl = ApiConfig.baseUrl;
 
@@ -188,42 +196,45 @@ class UserAvatar extends StatelessWidget {
     final avatar = ClipOval(
       child: url == null
           ? _buildFallback()
-          : Image.network(
-              url,
+          : PhotoHero(
+              tag: heroTag,
+              child: Image.network(
+                url,
 
-              width: radius * 2,
+                width: radius * 2,
 
-              height: radius * 2,
+                height: radius * 2,
 
-              fit: BoxFit.cover,
+                fit: BoxFit.cover,
 
-              errorBuilder: (context, error, stackTrace) {
-                return _buildFallback();
-              },
+                errorBuilder: (context, error, stackTrace) {
+                  return _buildFallback();
+                },
 
-              loadingBuilder: (context, child, progress) {
-                if (progress == null) {
-                  return child;
-                }
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) {
+                    return child;
+                  }
 
-                return Container(
-                  width: radius * 2,
+                  return Container(
+                    width: radius * 2,
 
-                  height: radius * 2,
+                    height: radius * 2,
 
-                  alignment: Alignment.center,
+                    alignment: Alignment.center,
 
-                  color: AppColors.primary.withValues(alpha: 0.06),
+                    color: AppColors.primary.withValues(alpha: 0.06),
 
-                  child: SizedBox(
-                    width: radius * 0.65,
+                    child: SizedBox(
+                      width: radius * 0.65,
 
-                    height: radius * 0.65,
+                      height: radius * 0.65,
 
-                    child: const CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                );
-              },
+                      child: const CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  );
+                },
+              ),
             ),
     );
 

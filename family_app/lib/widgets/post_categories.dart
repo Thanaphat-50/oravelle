@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_motion.dart';
 import '../theme/app_theme.dart';
 
 // =======================================================
@@ -153,7 +154,7 @@ class CategoryChoiceChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
           onTap: onTap,
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
+            duration: AppMotion.of(context, AppMotion.button),
             constraints: const BoxConstraints(minHeight: 40),
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: 18),

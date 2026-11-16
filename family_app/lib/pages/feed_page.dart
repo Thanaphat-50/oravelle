@@ -12,6 +12,8 @@ import '../services/post_service.dart';
 import '../services/search_service.dart';
 import '../services/social_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/compose_speed_dial.dart';
+import '../widgets/like_heart.dart';
 import '../theme/themed_widgets.dart';
 import '../widgets/comment_media.dart';
 import '../widgets/comment_sheet.dart';
@@ -260,6 +262,9 @@ class _FeedPageState extends State<FeedPage> {
 
   // โพสต์ที่กำลังส่งการถูกใจไป Server (กันกดรัว)
   final Set<int> likingPostIds = {};
+
+  // เพิ่มเมื่อผู้ใช้กดถูกใจเอง → หัวใจเล่นแอนิเมชัน (โหลดข้อมูลใหม่ไม่เพิ่ม = ไม่เล่น)
+  final Map<int, int> likePulses = {};
 
   // หมวดของโพสต์ชุมชนที่กำลังเขียน
   String composeCategory = 'general';
@@ -1447,6 +1452,8 @@ class _FeedPageState extends State<FeedPage> {
     setState(() {
       likingPostIds.add(postId);
 
+      likePulses[postId] = (likePulses[postId] ?? 0) + 1;
+
       post['liked_by_me'] = !wasLiked;
       post['likes_count'] = wasLiked
           ? (oldCount > 0 ? oldCount - 1 : 0)
@@ -2038,6 +2045,85 @@ class _FeedPageState extends State<FeedPage> {
   // ปุ่ม + ลอยมุมขวาล่าง (มีจุดเมื่อมีร่างโพสต์ค้างอยู่)
   // =====================================================
 
+  // เมนูสร้างโพสต์ (＋ แบบขยาย) — กันกดซ้ำระหว่างเปิด/ปิด และระหว่างหน้าต่างเขียนโพสต์เปิดอยู่
+  final GlobalKey composeButtonKey = GlobalKey();
+
+  bool composeMenuOpen = false;
+
+  Future<void> openComposeMenu() async {
+    if (composeMenuOpen || composerContext != null || isPosting) return;
+
+    final RenderObject? box = composeButtonKey.currentContext
+        ?.findRenderObject();
+
+    if (box is! RenderBox || !box.hasSize) {
+      await openComposer();
+      return;
+    }
+
+    final bool community = scope == FeedScope.community;
+
+    composeMenuOpen = true;
+
+    final ComposeAction? action = await showComposeMenu(
+      context,
+      anchor: box.localToGlobal(Offset.zero) & box.size,
+      audience: community
+          ? 'โพสต์ในชุมชน • ทุกคนในชุมชนเห็น'
+          : 'โพสต์ถึงกลุ่ม • เห็นเฉพาะสมาชิกกลุ่ม',
+      color: community ? communityColor : AppColors.primary,
+      items: [
+        const ComposeMenuItem(
+          ComposeAction.text,
+          Icons.edit_outlined,
+          'เขียนโพสต์',
+        ),
+        // แสดงเฉพาะสิ่งที่แนบเพิ่มได้จริงตอนนี้ (รูปกับวิดีโอใส่โพสต์เดียวกันไม่ได้)
+        if (pickedVideo == null && pickedImages.length < maxPostImages)
+          const ComposeMenuItem(
+            ComposeAction.photo,
+            Icons.image_outlined,
+            'รูปภาพ',
+          ),
+        if (pickedImages.isEmpty && pickedVideo == null)
+          const ComposeMenuItem(
+            ComposeAction.video,
+            Icons.videocam_outlined,
+            'วิดีโอ',
+          ),
+      ],
+    );
+
+    composeMenuOpen = false;
+
+    if (!mounted || action == null) return;
+
+    await openComposerFor(action);
+  }
+
+  // เปิดหน้าต่างเขียนโพสต์เดิม แล้วเตรียมชนิดเนื้อหาตามที่เลือก
+  // ยกเลิกเลือกไฟล์ → หน้าต่างและข้อความร่างยังอยู่
+  Future<void> openComposerFor(ComposeAction action) async {
+    if (composerContext != null) return;
+
+    final Future<void> sheet = openComposer();
+
+    if (action != ComposeAction.text) {
+      // รอหน้าต่างเลื่อนขึ้นเสร็จก่อนเปิดตัวเลือกไฟล์
+      await Future<void>.delayed(const Duration(milliseconds: 320));
+
+      if (mounted && composerContext != null && !isPosting) {
+        if (action == ComposeAction.photo) {
+          await pickImages();
+        } else {
+          await pickVideo();
+        }
+      }
+    }
+
+    await sheet;
+  }
+
   Widget buildComposeButton() {
     final bool community = scope == FeedScope.community;
 
@@ -2050,13 +2136,16 @@ class _FeedPageState extends State<FeedPage> {
             pickedVideo != null;
 
         return FloatingActionButton(
+          key: composeButtonKey,
           heroTag: null,
-          tooltip: community ? 'โพสต์ในชุมชน' : 'โพสต์ถึงกลุ่ม',
+          tooltip: community
+              ? 'สร้างโพสต์ในชุมชน (เปิดเมนู)'
+              : 'สร้างโพสต์ในกลุ่ม (เปิดเมนู)',
           backgroundColor: community ? communityColor : AppColors.primary,
-          foregroundColor: Colors.white,
+          foregroundColor: AppColors.onPrimary,
           shape: const CircleBorder(),
           onPressed: widget.onJoinFamily == null
-              ? openComposer
+              ? openComposeMenu
               : askToJoinFamily,
           child: Badge(
             isLabelVisible: hasDraft,
@@ -3714,7 +3803,10 @@ class _FeedPageState extends State<FeedPage> {
                       16,
                       14,
                     ),
-                    child: buildImageGrid(imageUrls),
+                    child: buildImageGrid(
+                      imageUrls,
+                      photoHeroTags.of(post, imageUrls.length),
+                    ),
                   ),
 
                 // ===========================================
@@ -3782,11 +3874,14 @@ class _FeedPageState extends State<FeedPage> {
   // 4 รูปขึ้นไป: ตาราง 2×2 ช่องสุดท้ายแสดง +N
   // =====================================================
 
-  Widget buildImageGrid(List<String> urls) {
+  // tag ภาพย่อสำหรับเปิดเต็มจอต่อเนื่อง (ผูกกับ Map ของโพสต์ → โพสต์ซ้อน/แชร์ไม่ชนกัน)
+  final PhotoHeroTags photoHeroTags = PhotoHeroTags();
+
+  Widget buildImageGrid(List<String> urls, List<Object> heroTags) {
     const double gap = 4;
 
     Widget tile(int index, {int extra = 0}) {
-      return buildImageTile(urls, index, extra: extra);
+      return buildImageTile(urls, heroTags, index, extra: extra);
     }
 
     Widget pair(Widget first, Widget second, {bool vertical = false}) {
@@ -3825,7 +3920,12 @@ class _FeedPageState extends State<FeedPage> {
     return ClipRRect(borderRadius: BorderRadius.circular(16), child: grid);
   }
 
-  Widget buildImageTile(List<String> urls, int index, {int extra = 0}) {
+  Widget buildImageTile(
+    List<String> urls,
+    List<Object> heroTags,
+    int index, {
+    int extra = 0,
+  }) {
     final Color placeholder = AppColors.fill;
 
     return Semantics(
@@ -3835,29 +3935,37 @@ class _FeedPageState extends State<FeedPage> {
         onTap: () {
           dismissKeyboard();
 
-          showPhotoViewer(context, urls: urls, initialIndex: index);
+          showPhotoViewer(
+            context,
+            urls: urls,
+            initialIndex: index,
+            heroTags: heroTags,
+          );
         },
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.network(
-              urls[index],
-              fit: BoxFit.cover,
-              cacheWidth: 900,
-              loadingBuilder: (context, child, progress) {
-                return progress == null
-                    ? child
-                    : ColoredBox(color: placeholder);
-              },
-              errorBuilder: (context, error, stackTrace) {
-                return ColoredBox(
-                  color: placeholder,
-                  child: Icon(
-                    Icons.broken_image_outlined,
-                    color: AppColors.muted,
-                  ),
-                );
-              },
+            PhotoHero(
+              tag: heroTags[index],
+              child: Image.network(
+                urls[index],
+                fit: BoxFit.cover,
+                cacheWidth: 900,
+                loadingBuilder: (context, child, progress) {
+                  return progress == null
+                      ? child
+                      : ColoredBox(color: placeholder);
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return ColoredBox(
+                    color: placeholder,
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      color: AppColors.muted,
+                    ),
+                  );
+                },
+              ),
             ),
             if (extra > 0)
               ColoredBox(
@@ -3904,20 +4012,14 @@ class _FeedPageState extends State<FeedPage> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // หัวใจเด้งเล็กน้อยตอนกด
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  transitionBuilder: (child, animation) {
-                    return ScaleTransition(scale: animation, child: child);
-                  },
-                  child: Icon(
-                    liked
-                        ? Icons.favorite_rounded
-                        : Icons.favorite_border_rounded,
-                    key: ValueKey(liked),
-                    color: color,
-                    size: 21,
-                  ),
+                // หัวใจขยายนิดหนึ่งเฉพาะตอนผู้ใช้กด (ชุดเดียวกับหน้าวิดีโอ)
+                LikeHeart(
+                  key: ValueKey('like-$postId'),
+                  liked: liked,
+                  pulse: likePulses[postId] ?? 0,
+                  likedColor: likeColor,
+                  color: AppColors.navy,
+                  size: 21,
                 ),
                 const SizedBox(width: 6),
                 Text(

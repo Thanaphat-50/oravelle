@@ -189,6 +189,34 @@ void main() {
     },
   );
 
+  testWidgets('attach panel: back closes it first and the draft stays', (
+    tester,
+  ) async {
+    await http.runWithClient(() async {
+      await open(tester);
+
+      await tester.enterText(find.byType(TextField), 'ร่างข้อความ');
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('แนบรูป ไฟล์ หรือลิงก์'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('แนบในแชท'), findsOneWidget);
+      expect(find.byTooltip('ปิดเมนูแนบ'), findsOneWidget);
+
+      // ย้อนกลับครั้งแรก = ปิดแผง (ยังอยู่ในห้อง) ข้อความร่างไม่หาย
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(find.text('แนบในแชท'), findsNothing);
+      expect(find.byType(ChatRoomPage), findsOneWidget);
+      expect(find.byTooltip('แนบรูป ไฟล์ หรือลิงก์'), findsOneWidget);
+      expect(input(tester).text, 'ร่างข้อความ');
+
+      await tester.pumpWidget(const SizedBox());
+    }, () => server([]));
+  });
+
   testWidgets(
     'attach menu offers four choices and links are checked before use',
     (tester) async {

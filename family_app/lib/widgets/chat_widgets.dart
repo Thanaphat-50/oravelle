@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../theme/app_motion.dart';
 import '../theme/app_theme.dart';
 import 'chat_media.dart';
 import 'user_avatar.dart';
@@ -387,6 +388,9 @@ class ChatComposer extends StatelessWidget {
   final VoidCallback? onEmoji;
   final bool emojiOpen;
 
+  // แผงแนบเปิดอยู่ → ปุ่ม ＋ แสดงเป็น × (ป้ายบอกสถานะ)
+  final bool attachOpen;
+
   const ChatComposer({
     super.key,
     required this.controller,
@@ -401,6 +405,7 @@ class ChatComposer extends StatelessWidget {
     this.onMic,
     this.onEmoji,
     this.emojiOpen = false,
+    this.attachOpen = false,
   });
 
   @override
@@ -462,7 +467,9 @@ class ChatComposer extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   IconButton.outlined(
-                    tooltip: 'แนบรูป ไฟล์ หรือลิงก์',
+                    tooltip: attachOpen
+                        ? 'ปิดเมนูแนบ'
+                        : 'แนบรูป ไฟล์ หรือลิงก์',
                     onPressed: onAttach,
                     style: IconButton.styleFrom(
                       minimumSize: const Size(48, 48),
@@ -473,7 +480,12 @@ class ChatComposer extends StatelessWidget {
                         color: AppColors.primary.withValues(alpha: 0.45),
                       ),
                     ),
-                    icon: Icon(Icons.add_rounded, color: AppColors.primary),
+                    icon: AnimatedRotation(
+                      turns: attachOpen ? 0.125 : 0,
+                      duration: AppMotion.of(context, AppMotion.button),
+                      curve: AppMotion.enter,
+                      child: Icon(Icons.add_rounded, color: AppColors.primary),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -481,7 +493,11 @@ class ChatComposer extends StatelessWidget {
                       controller: controller,
                       focusNode: focusNode,
                       // แผงอีโมจิเปิดอยู่ → แตะช่องพิมพ์ = กลับไปใช้แป้นพิมพ์
-                      onTap: emojiOpen ? onEmoji : null,
+                      onTap: emojiOpen
+                          ? onEmoji
+                          : attachOpen
+                          ? onAttach
+                          : null,
                       minLines: 1,
                       maxLines: 5,
                       maxLength: 2000,

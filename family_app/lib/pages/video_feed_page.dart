@@ -12,6 +12,7 @@ import '../services/social_service.dart';
 import '../widgets/comment_sheet.dart';
 import '../widgets/community_sheets.dart';
 import '../widgets/hashtag_text.dart';
+import '../widgets/like_heart.dart';
 import '../widgets/share_sheet.dart';
 import '../widgets/user_avatar.dart';
 import 'post_detail_page.dart';
@@ -147,6 +148,9 @@ class _VideoFeedPageState extends State<VideoFeedPage> {
   bool isLiked(Map<String, dynamic> post) =>
       post['liked_by_me'] == true || post['liked_by_me'] == 1;
 
+  // เพิ่มเมื่อผู้ใช้กดถูกใจเอง → หัวใจเล่นแอนิเมชัน (โหลดข้อมูลใหม่ไม่เล่น)
+  final Map<int, int> likePulses = {};
+
   Future<void> toggleLike(Map<String, dynamic> post) async {
     final int? postId = postIdOf(post);
 
@@ -163,6 +167,8 @@ class _VideoFeedPageState extends State<VideoFeedPage> {
 
     // เปลี่ยนบนจอทันที ถ้า Server ตอบผิดพลาดค่อยคืนค่าเดิม
     setState(() {
+      likePulses[postId] = (likePulses[postId] ?? 0) + 1;
+
       post['liked_by_me'] = !wasLiked;
       post['likes_count'] = wasLiked
           ? (oldCount > 0 ? oldCount - 1 : 0)
@@ -407,6 +413,7 @@ class _VideoFeedPageState extends State<VideoFeedPage> {
     required String label,
     required VoidCallback onTap,
     Color color = Colors.white,
+    Widget? iconWidget,
   }) {
     return InkResponse(
       onTap: onTap,
@@ -415,7 +422,8 @@ class _VideoFeedPageState extends State<VideoFeedPage> {
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Column(
           children: [
-            Icon(icon, color: color, size: 34, shadows: const [_shadow]),
+            iconWidget ??
+                Icon(icon, color: color, size: 34, shadows: const [_shadow]),
             const SizedBox(height: 3),
             Text(
               label,
@@ -497,6 +505,15 @@ class _VideoFeedPageState extends State<VideoFeedPage> {
                 color: liked ? const Color(0xFFFF4D6D) : Colors.white,
                 label: '${countOf(post['likes_count'])}',
                 onTap: () => toggleLike(post),
+                iconWidget: LikeHeart(
+                  key: ValueKey('video-like-${postIdOf(post)}'),
+                  liked: liked,
+                  pulse: likePulses[postIdOf(post)] ?? 0,
+                  likedColor: const Color(0xFFFF4D6D),
+                  color: Colors.white,
+                  size: 34,
+                  shadows: const [_shadow],
+                ),
               ),
               buildAction(
                 icon: Icons.chat_bubble_rounded,
